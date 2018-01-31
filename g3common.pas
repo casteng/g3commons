@@ -29,10 +29,9 @@ uses
   // Returns sign of the value
   function Sign(Value: Single): Single; overload; {$I inline.inc}
   // Returns sign of the value
-  function Sign(Value: Integer): Integer; overload;
+  function Sign(Value: Integer): Integer; overload; {$I inline.inc}
   // Returns true if the value is a power of two
-  function IsPowerOf2(const value: Integer): Boolean;
- {$I inline.inc}
+  function IsPowerOf2(const value: Integer): Boolean; {$I inline.inc}
   { Returns 1/Sqrt(x). May be fast if assembler optimizations are on.
     If FLOAT_IEEE is defined it's also fast, but returned value may differ from expected value by at most 0.175%
     and for 0 value 19817753709685768200 is returned. }
@@ -45,7 +44,7 @@ uses
   {$ENDIF}
 
   // Returns base pointer shifted by offset
-  function PtrOffs(Base: Pointer; Offset: Integer): Pointer; {$I inline.inc}
+  function PtrOffs(Base: Pointer; Offset: PtrInt): Pointer; {$I inline.inc}
   // Returns pointer as a number
   function PtrToInt(P: Pointer): PtrUInt; {$I inline.inc}
 
@@ -232,7 +231,7 @@ begin
 end;
 {$ENDIF}
 
-function PtrOffs(Base: Pointer; Offset: Integer): Pointer; {$I inline.inc}
+function PtrOffs(Base: Pointer; Offset: PtrInt): Pointer; {$I inline.inc}
 begin
   Result := Base;
   Inc(PByte(Result), Offset);
