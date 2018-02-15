@@ -47,6 +47,14 @@ type
     {$IFEND}
     PPtrUInt = ^PtrUInt;
   {$IFEND}
+  {$IF not Declared(PtrInt)}
+    {$IF Declared(NativeInt)}
+    PtrInt = NativeInt;
+    {$ELSE}
+    PtrUInt = Integer;
+    {$IFEND}
+    PPtrInt = ^PtrInt;
+  {$IFEND}
   {$IFDEF UNICODE_ONLY}
   // Entity name type
   TEntityName = UnicodeString;

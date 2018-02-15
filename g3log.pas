@@ -399,7 +399,7 @@ procedure AddDefaultAppenders();
 begin
   {$IFDEF WINDOWS}{$IFDEF DELPHI}
     if DebugHook > 0 then
-      TCEWinDebugAppender.Create(llVerbose);
+      TWinDebugAppender.Create(llVerbose);
   {$ENDIF}{$ENDIF}
 
   if IsConsole then begin
@@ -417,7 +417,7 @@ begin
 
   {$IFDEF WINDOWS}{$IFDEF DELPHI}
     if DebugHook > 0 then
-      RemoveAppender(FindAppender(TCEWinDebugAppender));
+      RemoveAppender(FindAppender(TWinDebugAppender));
   {$ENDIF}{$ENDIF}
 end;
 
