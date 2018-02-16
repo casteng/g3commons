@@ -30,12 +30,20 @@ uses
   function Sign(Value: Single): Single; overload; {$I inline.inc}
   // Returns sign of the value
   function Sign(Value: Integer): Integer; overload; {$I inline.inc}
+  // Swaps two integer values
+  procedure SwapI(var a, b: Integer); {$I inline.inc}
   // Returns true if the value is a power of two
   function IsPowerOf2(const value: Integer): Boolean; {$I inline.inc}
+  // Returns power of 2 value which is greater or equal to x
+  function NextPowerOf2(const x: Integer): Integer; {$I inline.inc}
   { Returns 1/Sqrt(x). May be fast if assembler optimizations are on.
     If FLOAT_IEEE is defined it's also fast, but returned value may differ from expected value by at most 0.175%
     and for 0 value 19817753709685768200 is returned. }
   function InvSqrt(x: Single): Single; {$I inline.inc}
+  // Returns the smallest value that is greater than or equal to X and is integer
+  function Ceil(const X: Single): Integer; {$I inline.inc}
+  // Returns the largest value that is less than or equal to X and is integer
+  function Floor(const X: Single): Integer; {$I inline.inc}
   {$IFDEF FLOAT_IEEE}
   // Returns True if v1 equals to v2 with relative accuracy specified in Units in the Last Place by MAX_ULPS
   function FloatEquals(const v1: Double; const v2: Double): Boolean; overload; {$I inline.inc}
@@ -189,9 +197,30 @@ begin
   Result := Ord(Value > 0) - Ord(Value < 0);
 end;
 
-function IsPowerOf2(const value: Integer): Boolean;
+procedure SwapI(var a, b: Integer); {$I inline.inc}
+begin
+  a := a xor b;
+  b := b xor a;
+  a := a xor b;
+end;
+
+function IsPowerOf2(const value: Integer): Boolean; {$I inline.inc}
 begin
   Result := value and (value-1) = 0;
+end;
+
+function NextPowerOf2(const x: Integer): Integer; {$I inline.inc}
+begin
+  Result := x-1;
+  Result := Result or Result shr 1;
+  Result := Result or Result shr 2;
+  Result := Result or Result shr 4;
+  Result := Result or Result shr 8;
+  Result := Result or Result shr 16;
+  {$IF SizeOf(Integer) > 4}
+  Result := Result or Result shr 32;
+  {$ENDIF}
+  Inc(Result);
 end;
 
 function InvSqrt(x: Single): Single; {$I inline.inc}
@@ -208,6 +237,18 @@ begin
 begin
   Result := 1 / Sqrt(x);
 {$ENDIF}
+end;
+
+function Ceil(const X: Single): Integer; {$I inline.inc}
+begin
+  Result := Integer(Trunc(X));
+  Result := Result + Ord(Frac(X) > 0);
+end;
+
+function Floor(const X: Single): Integer; {$I inline.inc}
+begin
+  Result := Integer(Trunc(X));
+  Result := Result - Ord(Frac(X) < 0);
 end;
 
 {$IFDEF FLOAT_IEEE}
