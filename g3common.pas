@@ -219,7 +219,7 @@ begin
   Result := Result or Result shr 16;
   {$IF SizeOf(Integer) > 4}
   Result := Result or Result shr 32;
-  {$ENDIF}
+  {$IFEND}
   Inc(Result);
 end;
 

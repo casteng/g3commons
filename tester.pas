@@ -505,8 +505,8 @@ end;
 procedure TTestRunner.PrepareTests(Suites: TTestSuiteVector);
 var i: Integer;
 begin
-  if Suites.Count = 0 then Exit;
-  for i := 0 to Suites.Count-1 do CreateLevel(Suites[i], True);
+  if Suites.Size = 0 then Exit;
+  for i := 0 to Suites.Size-1 do CreateLevel(Suites[i], True);
   SetLength(FAllTests, FTestRoot.GetTotalTestCount());
   FillAllTests(FTestRoot, FAllTests, 0);
   for i := 0 to GetTotalTests()-1 do Assert(FAllTests[i].Index = i);
