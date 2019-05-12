@@ -51,7 +51,7 @@ type
     {$IF Declared(NativeInt)}
     PtrInt = NativeInt;
     {$ELSE}
-    PtrUInt = Integer;
+    PtrInt = Integer;
     {$IFEND}
     PPtrInt = ^PtrInt;
   {$IFEND}
@@ -81,6 +81,8 @@ type
       True: (B, G, R, A: Byte);
   end;
 
+  TByteBuffer = array[0..$6FFFFFFF] of Byte;
+  PByteBuffer = ^TByteBuffer;
   TWordArray = array[0..MaxInt div SizeOf(Word)-1] of Word;
   PWordArray = ^TWordArray;
 
