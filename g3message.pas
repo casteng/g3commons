@@ -144,7 +144,11 @@ type
   TOSMessage = class(TMessage)
   end;
 
-  // Indicates than application has been activated
+  // Indicates that application started to shut down
+  TAppClosingMsg = class(TOSMessage)
+  end;
+
+  // Indicates that application has been activated
   TAppActivateMsg = class(TOSMessage)
   end;
 

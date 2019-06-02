@@ -351,7 +351,7 @@ procedure AddAppender(Appender: TAppender);
 begin
   if not Assigned(Appender) then Exit;
   if IndexOfAppender(Appender) >= 0 then begin
-    Warning('CELog', 'Duplicate appender of class "' + Appender.ClassName + '"');
+    Warning('g3log', 'Duplicate appender of class "' + Appender.ClassName + '"');
     Exit;
   end;
   Lock();

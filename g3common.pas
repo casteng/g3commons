@@ -3,7 +3,7 @@
 
 The unit contains common routines
 
-@author(George Bakhtadze (avagames@gmail.com))
+The contents of this file are subject to the license defined in the file licence.txt.
 }
 
 unit g3common;
@@ -133,7 +133,7 @@ type
     Use Flush() method to apply remembered write operations.
     Not thread safe. There is on much sense to make this class thread safe as properties will be written from one thread.
   }
-  TCEBackBuffer = class
+  TBackBuffer = class
   private
     FBuffer: Pointer;
     {$IFOPT C+}FSize: Integer;{$ENDIF}
@@ -454,9 +454,9 @@ begin
   Result := TRefcountedContainer.Create;
 end;
 
-{ TCEBackBuffer }
+{ TBackBuffer }
 
-function TCEBackBuffer.GetIndex(Dest: Pointer; Size: Integer): Integer;
+function TBackBuffer.GetIndex(Dest: Pointer; Size: Integer): Integer;
 begin
   Result := 0;
   while Result < FCount do
@@ -468,17 +468,17 @@ begin
     end else begin
       if Result > 0 then
         FData^[Result].Data := PtrOffs(FData^[Result-1].Data, FData^[Result-1].Size);
-      {$IFOPT C+} Assert(PtrToInt(FData^[Result].Data) + Cardinal(Size) <= PtrToInt(FBuffer) + Cardinal(FSize), 'TCEBackBuffer.WriteProperty: Buffer is too small'); {$ENDIF}
+      {$IFOPT C+} Assert(PtrToInt(FData^[Result].Data) + Cardinal(Size) <= PtrToInt(FBuffer) + Cardinal(FSize), 'TBackBuffer.WriteProperty: Buffer is too small'); {$ENDIF}
       FData^[Result].OrigData := Dest;
       FData^[Result].Size := Size;
       Exit;
     end;
     Inc(Result);
   end;
-  Assert(False, 'TCEBackBuffer.WriteProperty: No backbuffer slots left');
+  Assert(False, 'TBackBuffer.WriteProperty: No backbuffer slots left');
 end;
 
-constructor TCEBackBuffer.Create(Count, Size: Integer);
+constructor TBackBuffer.Create(Count, Size: Integer);
 begin
   Assert((Count > 0) and (Size > 0));
   FCount := Count;
@@ -489,14 +489,14 @@ begin
   FData^[0].Data := FBuffer;
 end;
 
-destructor TCEBackBuffer.Destroy;
+destructor TBackBuffer.Destroy;
 begin
   FreeMem(FData);
   FreeMem(FBuffer);
   inherited;
 end;
 
-procedure TCEBackBuffer.WriteProperty(Dest: Pointer; Size: Integer; const Value);
+procedure TBackBuffer.WriteProperty(Dest: Pointer; Size: Integer; const Value);
 var
   Index: Integer;
 begin
@@ -504,7 +504,7 @@ begin
   Move(Value, FData^[Index].Data^, Size);
 end;
 
-procedure TCEBackBuffer.Flush;
+procedure TBackBuffer.Flush;
 var
   i: Integer;
 begin
