@@ -7,7 +7,7 @@ The contents of this file are subject to the license defined in the file licence
 }
 
 unit g3context;
-{$I g3ge.inc}
+{$I g3config.inc}
 
 interface
 

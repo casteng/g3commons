@@ -7,7 +7,7 @@ The unit contains concurrency and synchronization related routines. Platform spe
 }
 
 unit g3concurrent;
-{$I g3ge.inc}
+{$I g3config.inc}
 
 interface
 
