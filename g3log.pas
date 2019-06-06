@@ -210,9 +210,9 @@ end;
 const EmptyCodeLoc: TCodeLocation = (Address: nil; SourceFilename: ''; UnitName: ''; ProcedureName: ''; LineNumber: -1);
 
 procedure Log(const Tag: TLogTag; const Str: string; const CodeLoc: TCodeLocation; Level: TLogLevel); overload;
-{$IFDEF LOG} var i: Integer; Time: TDateTime; SrcLocPtr: PCodeLocation; {$ENDIF}
+{$IFDEF LOGGING} var i: Integer; Time: TDateTime; SrcLocPtr: PCodeLocation; {$ENDIF}
 begin
-  {$IFDEF LOG}
+  {$IFDEF LOGGING}
   Lock();
 
   if CodeLoc.LineNumber = -1 then
@@ -244,62 +244,62 @@ end;
 
 procedure Verbose(const Str: string);
 begin
-  {$IFDEF LOG} Log('', Str, EmptyCodeLoc, llVerbose); {$ENDIF}
+  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llVerbose); {$ENDIF}
 end;
 
 procedure Verbose(const Tag: TLogTag; const Str: string); overload;
 begin
-  {$IFDEF LOG} Log(Tag, Str, EmptyCodeLoc, llVerbose); {$ENDIF}
+  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llVerbose); {$ENDIF}
 end;
 
 procedure Debug(const Str: string);
 begin
-  {$IFDEF LOG} Log('', Str, EmptyCodeLoc, llDebug); {$ENDIF}
+  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llDebug); {$ENDIF}
 end;
 
 procedure Debug(const Tag: TLogTag; const Str: string); overload;
 begin
-  {$IFDEF LOG} Log(Tag, Str, EmptyCodeLoc, llDebug); {$ENDIF}
+  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llDebug); {$ENDIF}
 end;
 
 procedure Info(const Str: string);
 begin
-  {$IFDEF LOG} Log('', Str, EmptyCodeLoc, llInfo); {$ENDIF}
+  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llInfo); {$ENDIF}
 end;
 
 procedure Info(const Tag: TLogTag; const Str: string); overload;
 begin
-  {$IFDEF LOG} Log(Tag, Str, EmptyCodeLoc, llInfo); {$ENDIF}
+  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llInfo); {$ENDIF}
 end;
 
 procedure Warning(const Str: string);
 begin
-  {$IFDEF LOG} Log('', Str, EmptyCodeLoc, llWarning); {$ENDIF}
+  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llWarning); {$ENDIF}
 end;
 
 procedure Warning(const Tag: TLogTag; const Str: string); overload;
 begin
-  {$IFDEF LOG} Log(Tag, Str, EmptyCodeLoc, llWarning); {$ENDIF}
+  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llWarning); {$ENDIF}
 end;
 
 procedure Error(const Str: string);
 begin
-  {$IFDEF LOG} Log('', Str, EmptyCodeLoc, llError); {$ENDIF}
+  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llError); {$ENDIF}
 end;
 
 procedure Error(const Tag: TLogTag; const Str: string); overload;
 begin
-  {$IFDEF LOG} Log(Tag, Str, EmptyCodeLoc, llError); {$ENDIF}
+  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llError); {$ENDIF}
 end;
 
 procedure Fatal(const Str: string);
 begin
-  {$IFDEF LOG} Log('', Str, EmptyCodeLoc, llFatalError); {$ENDIF}
+  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llFatalError); {$ENDIF}
 end;
 
 procedure Fatal(const Tag: TLogTag; const Str: string); overload;
 begin
-  {$IFDEF LOG} Log(Tag, Str, EmptyCodeLoc, llFatalError); {$ENDIF}
+  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llFatalError); {$ENDIF}
 end;
 
 procedure LogStackTrace(const StackTrace: TBaseStackTrace);
