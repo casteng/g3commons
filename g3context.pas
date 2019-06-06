@@ -32,6 +32,8 @@ type
   public
     constructor Create;
     destructor Destroy(); override;
+
+    procedure AddProperties(Properties: TProperties);
     procedure Remove(const Name: TPropertyName);
     function GetInt(const Name: TPropertyName; const Def: Integer = 0): Integer;
     function GetInt64(const Name: TPropertyName; const Def: Int64 = 0): Int64;
@@ -117,6 +119,11 @@ begin
   Data.Free();
   Data := nil;
   inherited;
+end;
+
+procedure TConfig.AddProperties(Properties: TProperties);
+begin
+  Data.AddAll(Properties);
 end;
 
 procedure TConfig.Remove(const Name: TPropertyName);

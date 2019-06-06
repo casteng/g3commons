@@ -287,7 +287,7 @@ function CharPos(const ch: AnsiChar; const s: AnsiString; const Start: Integer):
 begin       // TODO: optimize
   Result := Pos(ch, Copy(s, Start, Length(s)));
   if Result >= STRING_INDEX_BASE then
-    Result := Result + Start
+    Result := Result + Start - STRING_INDEX_BASE
   else
     Result := -1;
 end;

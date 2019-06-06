@@ -18,39 +18,39 @@ type
   // Type for property names
   TPropertyName = AnsiString;
 
-   // Possible property types
+  // Possible property types
   TPropertyType = (
-    // Boolean value
-    ptBoolean,
-    // 32-bit integer value
-    ptInteger,
-    // 64-bit integer value
-    ptInt64,
-    // Single-precision floating-point value
-    ptSingle,
-    // Double-precision floating-point value
-    ptDouble,
-    // Short string value
-    ptShortString,
-    // Ansi string value
-    ptAnsiString,
-    // Unicode string value
-    ptString,
-    // Enumerated value
-    ptEnumeration,
-    // Set of numbers [0..31]
-    ptSet,
-    // Pointer value
-    ptPointer,
-    // A link to an object
-    ptObjectLink,
-    // Bynary data
-    ptBinary,
-    // Object value
-    ptObject,
-    // Class value
-    ptClass
-  );
+                    // Boolean value
+                    ptBoolean,
+                    // 32-bit integer value
+                    ptInteger,
+                    // 64-bit integer value
+                    ptInt64,
+                    // Single-precision floating-point value
+                    ptSingle,
+                    // Double-precision floating-point value
+                    ptDouble,
+                    // Short string value
+                    ptShortString,
+                    // Ansi string value
+                    ptAnsiString,
+                    // Unicode string value
+                    ptString,
+                    // Enumerated value
+                    ptEnumeration,
+                    // Set of numbers [0..31]
+                    ptSet,
+                    // Pointer value
+                    ptPointer,
+                    // A link to an object
+                    ptObjectLink,
+                    // Bynary data
+                    ptBinary,
+                    // Object value
+                    ptObject,
+                    // Class value
+                    ptClass
+                    );
 
   { Type for serializable binary data.
     Published properties of descendant types will be included during serialization and deserialization.
@@ -115,19 +115,19 @@ type
     AsUnicodeString: UnicodeString;
     AsAnsiString: AnsiString;
     // Property value as various type
-    case t: TPropertyType of
-      ptBoolean: (AsBoolean: Boolean);
-      ptInteger, ptEnumeration, ptSet: (AsInteger: Integer);
-      ptInt64: (AsInt64: Int64);
-      ptSingle: (AsSingle: Single);
-      ptDouble: (AsDouble: Double);
-      ptShortString: (AsShortString: ShortString);
-      ptObject: (AsObject: TObject);
-      ptClass: (AsClass: TClass);
-      ptPointer: (AsPointer: Pointer);
-      ptObjectLink: (Linked: TObject; LinkedClass: CAbstractEntity);
-      ptBinary: (AsData: TBinaryData; BinDataClass: CBinaryData);
-      //, ptMethod, ptVariant, ptInterface: ();
+  case t: TPropertyType of
+    ptBoolean: (AsBoolean: Boolean);
+    ptInteger, ptEnumeration, ptSet: (AsInteger: Integer);
+    ptInt64: (AsInt64: Int64);
+    ptSingle: (AsSingle: Single);
+    ptDouble: (AsDouble: Double);
+    ptShortString: (AsShortString: ShortString);
+    ptObject: (AsObject: TObject);
+    ptClass: (AsClass: TClass);
+    ptPointer: (AsPointer: Pointer);
+    ptObjectLink: (Linked: TObject; LinkedClass: CAbstractEntity);
+    ptBinary: (AsData: TBinaryData; BinDataClass: CBinaryData);
+    //, ptMethod, ptVariant, ptInterface: ();
   end;
 
   PProperty = ^TProperty;
@@ -149,6 +149,8 @@ type
     function IndexOfName(const Name: TPropertyName): Integer; {$I inline.inc}
   end;
 
+  TPropertyProcessor = function(const Name: TPropertyName; TypeId: TPropertyType; const Value: TPropertyValue): Boolean;
+
   { @Abstract(Property collection)    }
   TProperties = class
   protected
@@ -168,6 +170,9 @@ type
     // Destroys the property collection
     destructor Destroy; override;
 
+    // Add all properties from the given Properties to this properties
+    procedure AddAll(const Properties: TProperties);
+
     // Add a property or reset an existing one
     function AddProp(const Name: TPropertyName; TypeId: TPropertyType): PPropertyValue;
 
@@ -176,6 +181,9 @@ type
     procedure AddInt(const Name: TPropertyName; const Value: Integer);
     procedure AddInt64(const Name: TPropertyName; const Value: Int64);
     procedure AddSingle(const Name: TPropertyName; const Value: Single);
+
+    // Calls the processor for each property. Stops if the processor returns False. Returns True if all properties are processed.
+    function ForEach(Processor: TPropertyProcessor): Boolean;
 
     // Property definitions
     property Prop[const Name: TPropertyName]: TProperty read GetProperty write SetProperty;
@@ -385,12 +393,18 @@ end;
 
 function TProperties.GetPropByIndex(Index: Integer): PProperty;
 begin
-  Result := FProperties.GetPtr(Index); //TODO: handle non existing name
+  if Index >= 0 then
+    Result := FProperties.GetPtr(Index)
+  else
+    Result := nil;
 end;
 
-function TProperties.GEtValueByIndex(Index: Integer): PPropertyValue;
+function TProperties.GetValueByIndex(Index: Integer): PPropertyValue;
 begin
-  Result := @FValues[Index]; //TODO: handle non existing name
+  if Index >= 0 then
+    Result := @FValues[Index]
+  else
+    Result := nil;
 end;
 
 function TProperties.GetProperty(const Name: TPropertyName): TProperty;
@@ -434,6 +448,17 @@ begin
   inherited;
 end;
 
+procedure TProperties.AddAll(const Properties: TProperties);
+var
+  i: Integer;
+begin
+  for i := 0 to Properties.FProperties.Size- 1 do
+  begin
+    AddProp(Properties.FProperties[i].Name, Properties.FProperties[i].TypeId);
+    FValues[FProperties.Size-1] := Properties.FValues[i];
+  end;
+end;
+
 function TProperties.AddProp(const Name: TPropertyName; TypeId: TPropertyType): PPropertyValue;
 var
   Index: Integer;
@@ -473,6 +498,15 @@ end;
 procedure TProperties.AddSingle(const Name: TPropertyName; const Value: Single);
 begin
   AddProp(Name, ptSingle)^.AsSingle := Value;
+end;
+
+function TProperties.ForEach(Processor: TPropertyProcessor): Boolean;
+var
+  i: Integer;
+begin
+  i := 0;
+  while (i < FProperties.Size) and Processor(FProperties[i].Name, FProperties[i].TypeId, FValues[i]) do;
+  Result := i < FProperties.Size;
 end;
 
 { TPropertyFiler }
