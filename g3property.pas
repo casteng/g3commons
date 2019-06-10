@@ -15,9 +15,6 @@ uses
   g3types, {!}Template, g3IO;
 
 type
-  // Type for property names
-  TPropertyName = AnsiString;
-
   // Possible property types
   TPropertyType = (
                     // Boolean value

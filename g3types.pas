@@ -158,6 +158,9 @@ type
   TGlyphIndices = array[0..$FFFF] of Word;
   PGlyphIndices = ^TGlyphIndices;
 
+  // Type for entity property names
+  TPropertyName = AnsiString;
+
   // Base error class
   EError = Exception;
 
@@ -175,7 +178,7 @@ type
     // Should return unique name of this entity
     function GetFullName: TEntityName; virtual; abstract;
     // Set full name of a linked object so it can be resolved in future. See @Link(ResolveObjectLink).
-    procedure SetObjectLink(const PropertyName: string; const FullName: TEntityName); virtual; abstract;
+    procedure SetObjectLink(const PropertyName: TPropertyName; const FullName: TEntityName); virtual; abstract;
     // Handle the given message if it's appropriate for this entity
     procedure HandleMessage(const Msg: TMessage); virtual; abstract;
   end;

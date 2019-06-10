@@ -12,7 +12,8 @@ unit g3context;
 interface
 
 uses
-  g3property;
+  g3property,
+  g3types;
 
 type
 {$MESSAGE 'Instantiating TClassObjectMap interface'}
@@ -59,7 +60,7 @@ type
 implementation
 
 uses
-  g3log, g3common, {!}g3types;
+  g3log, g3common;
 
   {$MESSAGE 'Instantiating TClassObjectMap'}
   {$I tpl_coll_hashmap.inc}
