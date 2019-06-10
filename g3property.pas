@@ -175,6 +175,8 @@ type
 
     procedure AddString(const Name: TPropertyName; const Value: string);
     procedure AddAnsiString(const Name: TPropertyName; const Value: AnsiString);
+
+    procedure AddBoolean(const Name: TPropertyName; const Value: Boolean);
     procedure AddInt(const Name: TPropertyName; const Value: Integer);
     procedure AddInt64(const Name: TPropertyName; const Value: Int64);
     procedure AddSingle(const Name: TPropertyName; const Value: Single);
@@ -480,6 +482,11 @@ end;
 procedure TProperties.AddAnsiString(const Name: TPropertyName; const Value: AnsiString);
 begin
   AddProp(Name, ptAnsiString)^.AsAnsiString := Value;
+end;
+
+procedure TProperties.AddBoolean(const Name: TPropertyName; const Value: Boolean);
+begin
+  AddProp(Name, ptBoolean)^.AsBoolean := Value;
 end;
 
 procedure TProperties.AddInt(const Name: TPropertyName; const Value: Integer);

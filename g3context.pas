@@ -24,7 +24,7 @@ type
   // Maps class to instance
   TClassObjectMap = _GenHashMap;
 
-  // Class to store subsystem's parameters
+  // Class to store application and subsystem's parameters
   TConfig = class
   private
     Data: TProperties;
@@ -36,10 +36,14 @@ type
 
     procedure AddProperties(Properties: TProperties);
     procedure Remove(const Name: TPropertyName);
+
+    function GetFlag(const Name: TPropertyName; const Def: Boolean = false): Boolean;
     function GetInt(const Name: TPropertyName; const Def: Integer = 0): Integer;
     function GetInt64(const Name: TPropertyName; const Def: Int64 = 0): Int64;
     function GetFloat(const Name: TPropertyName; const Def: Single = 0.0): Single;
     function GetPointer(const Name: TPropertyName; const Def: Pointer = nil): Pointer;
+
+    procedure SetFlag(const Name: TPropertyName; Value: Boolean);
     procedure SetInt(const Name: TPropertyName; Value: Integer);
     procedure SetInt64(const Name: TPropertyName; Value: Int64);
     procedure SetFloat(const Name: TPropertyName; Value: Single);
@@ -132,6 +136,16 @@ begin
   g3log.Info(LOGTAG, 'Not implemented');
 end;
 
+function TConfig.GetFlag(const Name: TPropertyName; const Def: Boolean = false): Boolean;
+var
+  Value: PPropertyValue;
+begin
+  Result := Def;
+  Value := Data.Value[Name];
+  if Assigned(Value) then
+    Result := Value^.AsBoolean
+end;
+
 function TConfig.GetInt(const Name: TPropertyName; const Def: Integer = 0): Integer;
 var
   Value: PPropertyValue;
@@ -170,6 +184,11 @@ begin
   Value := Data.Value[Name];
   if Assigned(Value) then
     Result := Pointer(Value^.AsInt64)
+end;
+
+procedure TConfig.SetFlag(const Name: TPropertyName; Value: Boolean);
+begin
+  Data.AddBoolean(Name, Value);
 end;
 
 procedure TConfig.SetInt(const Name: TPropertyName; Value: Integer);

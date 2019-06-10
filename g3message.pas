@@ -30,6 +30,8 @@ type
                   mfBroadcast,
                   // Message's destination is core handler
                   mfCore,
+                  // Message has extended lifetime (10000 ticks)
+                  mfDurable,
                   // Message is asyncronous
                   mfAsync);
   // Message flag set
