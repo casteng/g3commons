@@ -23,7 +23,7 @@ type
 
 type
   // Method pointer which formats
-  TLogFormatDelegate = function(const Time: TDateTime; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel): string of object;
+  TLogFormatDelegate = function(const Time: TDateTime; const Tag: TLogTag; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel): string of object;
 
   // Log appender metaclass
   CAppender = class of TAppender;
@@ -38,11 +38,11 @@ type
     constructor Create(Level: TLogLevel);
   protected
     // Should be overridden to actually append log
-    procedure AppendLog(const Time: TDateTime; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel); virtual; abstract;
+    procedure AppendLog(const Time: TDateTime; const Tag: TLogTag; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel); virtual; abstract;
   private
     FFormatter: TLogFormatDelegate;
     FLogLevel: TLogLevel;
-    function GetPreparedStr(const Time: TDateTime; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel): string;
+    function GetPreparedStr(const Time: TDateTime; const Tag: TLogTag; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel): string;
     procedure SetLevel(Level: TLogLevel);
   public
     // Set of levels which to include in the log
@@ -50,37 +50,88 @@ type
     // String formatter delegate. It's recommended for descendant classes to use it.
     property Formatter: TLogFormatDelegate read FFormatter write FFormatter;
   end;
-    
-    // Filters by tag and calls all registered appenders to log the string with source location information
-  procedure Log(const Tag: TLogTag; const Str: string; const CodeLoc: TCodeLocation; Level: TLogLevel); overload;
-    // Calls all registered appenders to log the string with default log level
-  procedure Log(const Str: string); overload;
+
+  { Logging interface which may be used to set tag within a scope and automatically remove it.
+    Intended to be created with WithLog() function
+  }
+  ILog = {$IFNDEF NOLOGGING} interface {$ELSE} class public {$ENDIF}     // To avoid unnecessary stack frames w/o logging
+    // Set current tag
+    procedure SetTag(const Tag: TLogTag);
+    // Returns True if logging with current tag and the specified level is enabled
+    function IsEnabled(level: TLogLevel): Boolean;
     // Calls all registered appenders to log the verbose message
+    procedure Verbose(const Str: string); overload;
+    // Calls all registered appenders to log the debug message
+    procedure Debug(const Str: string); overload;
+    // Calls all registered appenders to log the info
+    procedure Info(const Str: string); overload;
+    // Calls all registered appenders to log the warning
+    procedure Warning(const Str: string); overload;
+    // Calls all registered appenders to log the error
+    procedure Error(const Str: string); overload;
+    // Calls all registered appenders to log the fatal error
+    procedure Fatal(const Str: string); overload;
+    // Calls all registered appenders to log the formatted verbose message
+    procedure Verbose(const Str: string; const Args: array of const); overload;
+    // Calls all registered appenders to log the formatted debug message
+    procedure Debug(const Str: string; const Args: array of const); overload;
+    // Calls all registered appenders to log the formatted info
+    procedure Info(const Str: string; const Args: array of const); overload;
+    // Calls all registered appenders to log the formatted warning
+    procedure Warning(const Str: string; const Args: array of const); overload;
+    // Calls all registered appenders to log the formatted error
+    procedure Error(const Str: string; const Args: array of const); overload;
+    // Calls all registered appenders to log the formatted fatal error
+    procedure Fatal(const Str: string; const Args: array of const); overload;
+  end;
+
+  // Filters by tag and calls all registered appenders to log the string with source location information
+  procedure DoLog(const Tag: TLogTag; const Str: string; const CodeLoc: TCodeLocation; Level: TLogLevel); overload;
+  // Filters by tag and calls all registered appenders to log the string with source location information
+  procedure DoLog(const Tag: TLogTag; const Str: string; Level: TLogLevel; const Args: array of const); overload;
+  // Calls all registered appenders to log the verbose message
   procedure Verbose(const Str: string); overload;
-    // Calls all registered appenders to log the debug message
+  // Calls all registered appenders to log the debug message
   procedure Debug(const Str: string); overload;
-    // Calls all registered appenders to log the info
+  // Calls all registered appenders to log the info
   procedure Info(const Str: string); overload;
-    // Calls all registered appenders to log the warning
+  // Calls all registered appenders to log the warning
   procedure Warning(const Str: string); overload;
-    // Calls all registered appenders to log the error
+  // Calls all registered appenders to log the error
   procedure Error(const Str: string); overload;
-    // Calls all registered appenders to log the fatal error
+  // Calls all registered appenders to log the fatal error
   procedure Fatal(const Str: string); overload;
-    // Calls all registered appenders to log the string with default log level
-  procedure Log(const Tag: TLogTag; const Str: string); overload;
-    // Calls all registered appenders to log the verbose message
-  procedure Verbose(const Tag: TLogTag; const Str: string); overload;
-    // Calls all registered appenders to log the debug message
-  procedure Debug(const Tag: TLogTag; const Str: string); overload;
-    // Calls all registered appenders to log the info
-  procedure Info(const Tag: TLogTag; const Str: string); overload;
-    // Calls all registered appenders to log the warning
-  procedure Warning(const Tag: TLogTag; const Str: string); overload;
-    // Calls all registered appenders to log the error
-  procedure Error(const Tag: TLogTag; const Str: string); overload;
-    // Calls all registered appenders to log the fatal error
-  procedure Fatal(const Tag: TLogTag; const Str: string); overload;
+  // Calls all registered appenders to log the formatted verbose message
+  procedure Verbose(const Str: string; const Args: array of const); overload;
+  // Calls all registered appenders to log the formatted debug message
+  procedure Debug(const Str: string; const Args: array of const); overload;
+  // Calls all registered appenders to log the formatted info
+  procedure Info(const Str: string; const Args: array of const); overload;
+  // Calls all registered appenders to log the formatted warning
+  procedure Warning(const Str: string; const Args: array of const); overload;
+  // Calls all registered appenders to log the formatted error
+  procedure Error(const Str: string; const Args: array of const); overload;
+  // Calls all registered appenders to log the formatted fatal error
+  procedure Fatal(const Str: string; const Args: array of const); overload;
+
+  // Set log tag for current thread
+  procedure SetTag(const Tag: TLogTag);
+
+  { Creates an instance of TLog and returns ILog reference.
+    Usage:
+    var
+      Log: ILog;
+    begin
+      Log := WithTag('someTag');
+      Log.Info('All calls to logging routines till the end of the scope from current thread will be with "someTag" tag.');
+      g3Log.Debug('Direct calls too');
+      ...
+    end;
+  }
+  function WithTag(const Tag: TLogTag): ILog; overload;
+
+  // Formatted version of WithTag()
+  function WithTag(const Tag: string; const Args: array of const): ILog; overload;
 
   // Prints to log the specified stack trace which can be obtained by some of BaseDebug unit routines
   procedure LogStackTrace(const StackTrace: TBaseStackTrace);
@@ -121,14 +172,14 @@ type
   TSysConsoleAppender = class(TAppender)
   protected
     // Prints the log string to a system console
-    procedure AppendLog(const Time: TDateTime; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel); override;
+    procedure AppendLog(const Time: TDateTime; const Tag: TLogTag; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel); override;
   end;
 
   // Use OutputsDebugString() for loging. Works only in Windows.
   TWinDebugAppender = class(TAppender)
   protected
     // Prints the log string with OutputsDebugString()
-    procedure AppendLog(const Time: TDateTime; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel); override;
+    procedure AppendLog(const Time: TDateTime; const Tag: TLogTag; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel); override;
   end;
 
   // Appends log messages to a file.
@@ -138,7 +189,7 @@ type
     constructor Create(const Filename: string; ALevel: TLogLevel);
   protected
     // Appends file with the log string
-    procedure AppendLog(const Time: TDateTime; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel); override;
+    procedure AppendLog(const Time: TDateTime; const Tag: TLogTag; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel); override;
   private
     LogFile: Text;
   end;
@@ -148,7 +199,7 @@ implementation
 
 uses
   {$IFDEF MULTITHREADLOG}
-    CEConcurrent,
+    g3Concurrent,
     {$IFDEF UNIX}
     {$ENDIF}
   {$ENDIF}
@@ -159,22 +210,64 @@ uses
 
 const
   // Default level prefixes
-  Prefix: array[TLogLevel] of string = (' (v)    ', ' (d)    ', ' (i)  ', '(WW)  ', '(EE)  ', '(!!)  ');
+  Prefix: array[TLogLevel] of string = (' (v) ', ' (d) ', ' (i) ', '(W) ', '(E) ', '(!) ');
+
+{$IFNDEF NOLOGGING}
+{$IFDEF MULTITHREADLOG}threadvar{$ELSE}var{$ENDIF}
+  CurrentTag: TLogTag;
+{$ENDIF}
+
+type
+  TLog = class(TLiteInterfacedObject, ILog)
+  private
+    OldTag: TLogTag;
+  public
+    constructor Create(const Tag: TLogTag);
+    destructor Destroy; override;
+
+    procedure SetTag(const Tag: TLogTag);
+    function IsEnabled(Level: TLogLevel): Boolean;
+
+    // Calls all registered appenders to log the verbose message
+    procedure Verbose(const Str: string); overload;
+    // Calls all registered appenders to log the debug message
+    procedure Debug(const Str: string); overload;
+    // Calls all registered appenders to log the info
+    procedure Info(const Str: string); overload;
+    // Calls all registered appenders to log the warning
+    procedure Warning(const Str: string); overload;
+    // Calls all registered appenders to log the error
+    procedure Error(const Str: string); overload;
+    // Calls all registered appenders to log the fatal error
+    procedure Fatal(const Str: string); overload;
+    // Calls all registered appenders to log the formatted verbose message
+    procedure Verbose(const Str: string; const Args: array of const); overload;
+    // Calls all registered appenders to log the formatted debug message
+    procedure Debug(const Str: string; const Args: array of const); overload;
+    // Calls all registered appenders to log the formatted info
+    procedure Info(const Str: string; const Args: array of const); overload;
+    // Calls all registered appenders to log the formatted warning
+    procedure Warning(const Str: string; const Args: array of const); overload;
+    // Calls all registered appenders to log the formatted error
+    procedure Error(const Str: string; const Args: array of const); overload;
+    // Calls all registered appenders to log the formatted fatal error
+    procedure Fatal(const Str: string; const Args: array of const); overload;
+  end;
 
 { TAppender }
 
 constructor TAppender.Create(Level: TLogLevel);
 begin
-  TimeFormat := 'dd"/"mm"/"yyyy hh":"nn":"ss"."zzz  ';
+  TimeFormat := 'yyyy"-"mm"-"dd hh":"nn":"ss"."zzz';
   LogLevel  := Level;
   FFormatter := GetPreparedStr;
   AddAppender(Self);
-  Log('Appender of class ' + ClassName + ' initialized');
+  DoLog('logger', 'Appender of class %s initialized', llInfo, [ClassName]);
 end;
 
-function TAppender.GetPreparedStr(const Time: TDateTime; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel): string;
+function TAppender.GetPreparedStr(const Time: TDateTime; const Tag: TLogTag; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel): string;
 begin
-  Result := FormatDateTime(TimeFormat, Now()) + Prefix[Level] + Str;
+  Result := FormatDateTime(TimeFormat, Time) + Prefix[Level] + Tag + '|' + Str;
   if (CodeLoc <> nil) then
     Result := Concat(Result, ' --- ', CodeLocToStr(CodeLoc^));
 end;
@@ -191,16 +284,15 @@ var
   {$IFDEF MULTITHREADLOG}
     Mutex: TCEMutex;
   {$ENDIF}
-//  LogLevelCount: array[TLogLevel] of Integer;
 
-procedure Lock();
+procedure Lock(); {$I inline.inc}
 begin
   {$IFDEF MULTITHREADLOG}
     MutexEnter(Mutex);
   {$ENDIF}
 end;
 
-procedure UnLock();
+procedure UnLock(); {$I inline.inc}
 begin
   {$IFDEF MULTITHREADLOG}
     MutexLeave(Mutex);
@@ -209,10 +301,10 @@ end;
 
 const EmptyCodeLoc: TCodeLocation = (Address: nil; SourceFilename: ''; UnitName: ''; ProcedureName: ''; LineNumber: -1);
 
-procedure Log(const Tag: TLogTag; const Str: string; const CodeLoc: TCodeLocation; Level: TLogLevel); overload;
-{$IFDEF LOGGING} var i: Integer; Time: TDateTime; SrcLocPtr: PCodeLocation; {$ENDIF}
+procedure DoLog(const Tag: TLogTag; const Str: string; const CodeLoc: TCodeLocation; Level: TLogLevel); overload;
+{$IFNDEF NOLOGGING} var i: Integer; Time: TDateTime; SrcLocPtr: PCodeLocation; {$ENDIF}
 begin
-  {$IFDEF LOGGING}
+  {$IFNDEF NOLOGGING}
   Lock();
 
   if CodeLoc.LineNumber = -1 then
@@ -224,89 +316,97 @@ begin
 
   for i := 0 to High(FAppenders) do
     if Level >= FAppenders[i].LogLevel then
-      FAppenders[i].AppendLog(Time, Str, SrcLocPtr, Level);
+      FAppenders[i].AppendLog(Time, Tag, Str, SrcLocPtr, Level);
 
   UnLock();
-
-//  Inc(LogLevelCount[Level]);
   {$ENDIF}
 end;
 
-procedure Log(const Str: string);
+procedure DoLog(const Tag: TLogTag; const Str: string; Level: TLogLevel; const Args: array of const); overload;
 begin
-  Log('', Str, EmptyCodeLoc, llInfo);
-end;
-
-procedure Log(const Tag: TLogTag; const Str: string); overload;
-begin
-  Log(Tag, Str, EmptyCodeLoc, llInfo);
+  {$IFNDEF NOLOGGING} DoLog(Tag, Format(Str, Args), EmptyCodeLoc, Level);{$ENDIF}
 end;
 
 procedure Verbose(const Str: string);
 begin
-  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llVerbose); {$ENDIF}
-end;
-
-procedure Verbose(const Tag: TLogTag; const Str: string); overload;
-begin
-  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llVerbose); {$ENDIF}
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llVerbose); {$ENDIF}
 end;
 
 procedure Debug(const Str: string);
 begin
-  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llDebug); {$ENDIF}
-end;
-
-procedure Debug(const Tag: TLogTag; const Str: string); overload;
-begin
-  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llDebug); {$ENDIF}
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llDebug); {$ENDIF}
 end;
 
 procedure Info(const Str: string);
 begin
-  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llInfo); {$ENDIF}
-end;
-
-procedure Info(const Tag: TLogTag; const Str: string); overload;
-begin
-  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llInfo); {$ENDIF}
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llInfo); {$ENDIF}
 end;
 
 procedure Warning(const Str: string);
 begin
-  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llWarning); {$ENDIF}
-end;
-
-procedure Warning(const Tag: TLogTag; const Str: string); overload;
-begin
-  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llWarning); {$ENDIF}
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llWarning); {$ENDIF}
 end;
 
 procedure Error(const Str: string);
 begin
-  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llError); {$ENDIF}
-end;
-
-procedure Error(const Tag: TLogTag; const Str: string); overload;
-begin
-  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llError); {$ENDIF}
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llError); {$ENDIF}
 end;
 
 procedure Fatal(const Str: string);
 begin
-  {$IFDEF LOGGING} Log('', Str, EmptyCodeLoc, llFatalError); {$ENDIF}
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llFatalError); {$ENDIF}
 end;
 
-procedure Fatal(const Tag: TLogTag; const Str: string); overload;
+procedure Verbose(const Str: string; const Args: array of const); overload;
 begin
-  {$IFDEF LOGGING} Log(Tag, Str, EmptyCodeLoc, llFatalError); {$ENDIF}
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llVerbose);{$ENDIF}
+end;
+
+procedure Debug(const Str: string; const Args: array of const); overload;
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llDebug);{$ENDIF}
+end;
+
+procedure Info(const Str: string; const Args: array of const); overload;
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llInfo);{$ENDIF}
+end;
+
+procedure Warning(const Str: string; const Args: array of const); overload;
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llWarning);{$ENDIF}
+end;
+
+procedure Error(const Str: string; const Args: array of const); overload;
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llError);{$ENDIF}
+end;
+
+procedure Fatal(const Str: string; const Args: array of const); overload;
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llFatalError);{$ENDIF}
+end;
+
+procedure SetTag(const Tag: TLogTag);
+begin
+  {$IFNDEF NOLOGGING} CurrentTag := Tag;{$ENDIF}
+end;
+
+function WithTag(const Tag: TLogTag): ILog; overload;
+begin
+  Result := TLog.Create(Tag);
+end;
+
+function WithTag(const Tag: string; const Args: array of const): ILog; overload;
+begin
+  Result := TLog.Create(TLogTag(Format(Tag, Args)));
 end;
 
 procedure LogStackTrace(const StackTrace: TBaseStackTrace);
 var i: Integer;
 begin
   for i := 0 to High(StackTrace) do
-    Log(' --- ' + IntToStr(i) + '. ' + CodeLocToStr(StackTrace[i]));
+    Info(' --- ' + IntToStr(i) + '. ' + CodeLocToStr(StackTrace[i]));
 end;
 
 var
@@ -323,7 +423,7 @@ begin
 
   CodeLocation := GetCodeLoc(Filename, '', '', LineNumber, ErrorAddr);
 
-  Log('', Message, CodeLocation, AssertLogLevel);
+  DoLog('', Message, CodeLocation, AssertLogLevel);
 end;
 
 function _Log(Level: TLogLevel): Boolean; overload;
@@ -351,7 +451,7 @@ procedure AddAppender(Appender: TAppender);
 begin
   if not Assigned(Appender) then Exit;
   if IndexOfAppender(Appender) >= 0 then begin
-    Warning('g3log', 'Duplicate appender of class "' + Appender.ClassName + '"');
+    DoLog('logger', 'Duplicate appender of class "%s', llWarning, [Appender.ClassName]);
     Exit;
   end;
   Lock();
@@ -437,25 +537,25 @@ end;
 
 { TConsoleAppender }
 
-procedure TSysConsoleAppender.AppendLog(const Time: TDateTime; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel);
+procedure TSysConsoleAppender.AppendLog(const Time: TDateTime; const Tag: TLogTag; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel);
 begin
   if IsConsole then
   begin
-    Writeln(Formatter(Time, Str, CodeLoc, Level));
+    Writeln(Formatter(Time, Tag, Str, CodeLoc, Level));
     Flush(Output);
   end;
 end;
 
 { TWinDebugAppender }
 
-procedure TWinDebugAppender.AppendLog(const Time: TDateTime; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel);
+procedure TWinDebugAppender.AppendLog(const Time: TDateTime; const Tag: TLogTag; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel);
 begin
   {$IFDEF WINDOWS}{$IFDEF DELPHI}
     if DebugHook > 0 then
       {$IFDEF UNICODE}
-        OutputDebugString(PWideChar(Formatter(Time, Str, CodeLoc, Level)));
+        OutputDebugString(PWideChar(Formatter(Time, Tag, Str, CodeLoc, Level)));
       {$ELSE}
-        OutputDebugStringA(PAnsiChar(Formatter(Time, Str, CodeLoc, Level)));
+        OutputDebugStringA(PAnsiChar(Formatter(Time, Tag, Str, CodeLoc, Level)));
       {$ENDIF}
   {$ENDIF}{$ENDIF}
 end;
@@ -477,30 +577,107 @@ begin
   inherited Create(ALevel);
 end;
 
-procedure TFileAppender.AppendLog(const Time: TDateTime; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel);
+procedure TFileAppender.AppendLog(const Time: TDateTime; const Tag: TLogTag; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel);
 begin
   {$I-}
   Append(LogFile);
   if IOResult <> 0 then Exit;
-  WriteLn(LogFile, Formatter(Time, Str, CodeLoc, Level));
+  WriteLn(LogFile, Formatter(Time, Tag, Str, CodeLoc, Level));
   Flush(LogFile);
   CloseFile(LogFile);
+end;
+
+{ TLog }
+
+constructor TLog.Create(const Tag: TLogTag);
+begin
+  OldTag := CurrentTag;
+  CurrentTag := Tag;
+end;
+
+destructor TLog.Destroy;
+begin
+  CurrentTag := OldTag;
+  inherited;
+end;
+
+procedure TLog.SetTag(const Tag: TLogTag);
+begin
+  CurrentTag := Tag;
+end;
+
+function TLog.IsEnabled(Level: TLogLevel): Boolean;
+begin
+  Result := true;
+end;
+
+procedure TLog.Verbose(const Str: string; const Args: array of const);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llVerbose); {$ENDIF}
+end;
+
+procedure TLog.Verbose(const Str: string);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llVerbose); {$ENDIF}
+end;
+
+procedure TLog.Debug(const Str: string; const Args: array of const);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llDebug); {$ENDIF}
+end;
+
+procedure TLog.Debug(const Str: string);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llDebug); {$ENDIF}
+end;
+
+procedure TLog.Info(const Str: string; const Args: array of const);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llInfo); {$ENDIF}
+end;
+
+procedure TLog.Info(const Str: string);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llInfo); {$ENDIF}
+end;
+
+procedure TLog.Warning(const Str: string; const Args: array of const);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llWarning); {$ENDIF}
+end;
+
+procedure TLog.Warning(const Str: string);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llWarning); {$ENDIF}
+end;
+
+procedure TLog.Error(const Str: string; const Args: array of const);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llError); {$ENDIF}
+end;
+
+procedure TLog.Error(const Str: string);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llError); {$ENDIF}
+end;
+
+procedure TLog.Fatal(const Str: string; const Args: array of const);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Format(Str, Args), EmptyCodeLoc, llFatalError); {$ENDIF}
+end;
+
+procedure TLog.Fatal(const Str: string);
+begin
+  {$IFNDEF NOLOGGING} DoLog(CurrentTag, Str, EmptyCodeLoc, llFatalError); {$ENDIF}
 end;
 
 initialization
   {$IFDEF MULTITHREADLOG}
     MutexCreate(Mutex);
   {$ENDIF}
-//  FillChar(LogLevelCount, SizeOf(LogLevelCount), 0);
   AddDefaultAppenders();
 finalization
-  Info('Log session shutdown');
-{  Log('Logged fatal errors: ' + IntToStr(LogLevelCount[lkFatalError])
-    + ', errors: ' + IntToStr(LogLevelCount[lkError])
-    + ', warnings: ' + IntToStr(LogLevelCount[lkWarning])
-    + ', titles: ' + IntToStr(LogLevelCount[lkNotice])
-    + ', infos: ' + IntToStr(LogLevelCount[lkInfo])
-    + ', debug info: ' + IntToStr(LogLevelCount[lkDebug]) );}
+  DoLog('logger', 'Log session shutdown', llInfo, []);
   DestroyAppenders();
   {$IFDEF MULTITHREADLOG}
     MutexDelete(Mutex)

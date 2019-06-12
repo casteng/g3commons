@@ -5,6 +5,7 @@
   {$IF CompilerVersion >= 15.0}             // Delphi 7
     {$DEFINE DELPHI}
     {$IF CompilerVersion >= 17.0}           // Delphi 2005
+      {$DEFINE DISTINCT_PCHAR_POINTER}
       {$DEFINE HAS_INLINE}
       {$DEFINE HAS_STRICT}
     {$IFEND}
@@ -64,30 +65,19 @@
 {$ENDIF}
 
 {$DEFINE FLOAT_IEEE}             // Assume IEEE floating point values representation
-{$DEFINE LOGGING}
+{.$DEFINE NOLOGGING}              // Disable logging completely
 
 {$IFDEF MOBILE}
-  {$DEFINE MULTITHREADING}        // Forced to use multithreading on mobile devices as UI thread should be lightweight
+  {$DEFINE MULTITHREADING}       // Forced to use multithreading on mobile devices as UI thread should be lightweight
 {$ELSE}
-  {$DEFINE HAS_TYPE_EXTENDED}     // Extended floating point type
-{$ENDIF}
-
-{.$DEFINE OPENGLES_EMULATION}     // Use GLES 2.0 emulation layer for desktops
-{$IFNDEF OPENGLES_EMULATION}
-  {$DEFINE OPENGL_ERROR_CHECK}          // Check for OpenGL errors
-{$ENDIF}
-{$IFDEF MOBILE}
-  {$DEFINE GLES20}
-{$ENDIF}
-{$IFDEF OPENGLES_EMULATION}
-    {$DEFINE GLES20}
+  {$DEFINE HAS_TYPE_EXTENDED}    // Extended floating point type
 {$ENDIF}
 
 {.$DEFINE MULTITHREADING}
 
 {$IFDEF MULTITHREADING}
+  {$IFNDEF NOLOGGING}
     {$DEFINE MULTITHREADLOG}
-    {$DEFINE MULTITHREADASSERT}
+  {$ENDIF}
+  {$DEFINE MULTITHREADASSERT}
 {$ENDIF}
-
-{$DEFINE COREFONT}                // Tiny 4x5 simple font

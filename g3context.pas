@@ -70,14 +70,14 @@ uses
   {$I tpl_coll_hashmap.inc}
 
 const
-  LOGTAG = 'g3.context';
+  LOGTAG = 'context';
 
 var
   ClassObjectMap: TClassObjectMap;
 
 procedure LogSingletonExists(Cls: TClass);
 begin
-  g3log.Error(LOGTAG, Cls.ClassName() + ' singleton was already created');
+  g3log.DoLog(LOGTAG, '%s singleton was already created', llError, [Cls.ClassName()]);
 end;
 
 function GetSingleton(AClass: TClass): TObject;
@@ -133,7 +133,7 @@ end;
 
 procedure TConfig.Remove(const Name: TPropertyName);
 begin
-  g3log.Info(LOGTAG, 'Not implemented');
+  g3log.DoLog(LOGTAG, 'Not implemented', llInfo, []);
 end;
 
 function TConfig.GetFlag(const Name: TPropertyName; const Def: Boolean = false): Boolean;
