@@ -133,6 +133,11 @@ type
   // Formatted version of WithTag()
   function WithTag(const Tag: string; const Args: array of const): ILog; overload;
 
+  // Logging with tags starting with TagStart will be sent only for level greater than MinLevel
+  procedure SetFiltering(const TagStart: TLogTag; MinLevel: TLogLevel);
+  // Remove all log filters
+  procedure ResetFiltering();
+
   // Prints to log the specified stack trace which can be obtained by some of BaseDebug unit routines
   procedure LogStackTrace(const StackTrace: TBaseStackTrace);
 
@@ -208,6 +213,14 @@ uses
   {$ENDIF}{$ENDIF}
   SysUtils;
 
+type
+  TLogFilter = record
+    TagStart: TLogTag;
+    MinLevel: TLogLevel;
+  end;
+  TlogFilters = array [0..$FFFF] of TLogFilter;
+  PLogFilters = ^TlogFilters;
+
 const
   // Default level prefixes
   Prefix: array[TLogLevel] of string = (' (v) ', ' (d) ', ' (i) ', '(W) ', '(E) ', '(!) ');
@@ -215,6 +228,9 @@ const
 {$IFNDEF NOLOGGING}
 {$IFDEF MULTITHREADLOG}threadvar{$ELSE}var{$ENDIF}
   CurrentTag: TLogTag;
+var
+  Filter: PLogFilters;
+  FilterSize, FilterCapacity: Integer;
 {$ENDIF}
 
 type
@@ -301,24 +317,43 @@ end;
 
 const EmptyCodeLoc: TCodeLocation = (Address: nil; SourceFilename: ''; UnitName: ''; ProcedureName: ''; LineNumber: -1);
 
+function PassFilter(const Tag: TLogTag; Level: TLogLevel): Boolean;                // TODO: optimize
+var
+  i: Integer;
+  TagStart: TLogTag;
+begin
+  Result := false;
+  for i := FilterSize - 1 downto 0 do
+  begin
+    TagStart := Filter^[i].TagStart;
+    if Copy(Tag, STRING_INDEX_BASE, Length(Prefix)) = TagStart then
+      if Level < Filter^[i].MinLevel then
+        Exit;
+  end;
+  Result := true;
+end;
+
 procedure DoLog(const Tag: TLogTag; const Str: string; const CodeLoc: TCodeLocation; Level: TLogLevel); overload;
 {$IFNDEF NOLOGGING} var i: Integer; Time: TDateTime; SrcLocPtr: PCodeLocation; {$ENDIF}
 begin
   {$IFNDEF NOLOGGING}
   Lock();
+  try
+    if not PassFilter(Tag, Level) then
+      Exit;
+    if CodeLoc.LineNumber = -1 then
+      SrcLocPtr := nil
+    else
+      SrcLocPtr := @CodeLoc;
 
-  if CodeLoc.LineNumber = -1 then
-    SrcLocPtr := nil
-  else
-    SrcLocPtr := @CodeLoc;
+    Time := Now;
 
-  Time := Now;
-
-  for i := 0 to High(FAppenders) do
-    if Level >= FAppenders[i].LogLevel then
-      FAppenders[i].AppendLog(Time, Tag, Str, SrcLocPtr, Level);
-
-  UnLock();
+    for i := 0 to High(FAppenders) do
+      if Level >= FAppenders[i].LogLevel then
+        FAppenders[i].AppendLog(Time, Tag, Str, SrcLocPtr, Level);
+  finally
+    UnLock();
+  end;
   {$ENDIF}
 end;
 
@@ -400,6 +435,35 @@ end;
 function WithTag(const Tag: string; const Args: array of const): ILog; overload;
 begin
   Result := TLog.Create(TLogTag(Format(Tag, Args)));
+end;
+
+procedure SetFiltering(const TagStart: TLogTag; MinLevel: TLogLevel);
+begin
+  Lock();
+  try
+    Inc(FilterSize);
+    if FilterCapacity < FilterSize then
+    begin
+      FilterCapacity := FilterSize +4;
+      ReallocMem(Filter, SizeOf(TLogFilter) * FilterCapacity);
+    end;
+    Filter^[FilterSize-1].TagStart := TagStart;
+    Filter^[FilterSize-1].MinLevel := MinLevel;
+  finally
+    UnLock();
+  end;
+end;
+
+procedure ResetFiltering();
+begin
+  Lock();
+  try
+    FreeAndNil(Filter);
+    FilterSize := 0;
+    FilterCapacity := 0;
+  finally
+    UnLock();
+  end;
 end;
 
 procedure LogStackTrace(const StackTrace: TBaseStackTrace);
@@ -675,10 +739,12 @@ initialization
   {$IFDEF MULTITHREADLOG}
     MutexCreate(Mutex);
   {$ENDIF}
+  ResetFiltering();
   AddDefaultAppenders();
 finalization
   DoLog('logger', 'Log session shutdown', llInfo, []);
   DestroyAppenders();
+  ResetFiltering();
   {$IFDEF MULTITHREADLOG}
     MutexDelete(Mutex)
   {$ENDIF}
