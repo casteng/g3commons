@@ -224,6 +224,9 @@ type
 const
   // Default level prefixes
   Prefix: array[TLogLevel] of string = (' (v) ', ' (d) ', ' (i) ', '(W) ', '(E) ', '(!) ');
+  // Level names
+  LEVEL_NAME: array[TLogLevel] of string = ('verbose', 'debug', 'info', 'warning', 'error', 'fatal');
+  LOG_TAG = TLogTag('logger');
 
 {$IFNDEF NOLOGGING}
 {$IFDEF MULTITHREADLOG}threadvar{$ELSE}var{$ENDIF}
@@ -278,7 +281,7 @@ begin
   LogLevel  := Level;
   FFormatter := GetPreparedStr;
   AddAppender(Self);
-  DoLog('logger', 'Appender of class %s initialized', llInfo, [ClassName]);
+  DoLog(LOG_TAG, 'Appender of class %s initialized', llInfo, [ClassName]);
 end;
 
 function TAppender.GetPreparedStr(const Time: TDateTime; const Tag: TLogTag; const Str: string; CodeLoc: PCodeLocation; Level: TLogLevel): string;
@@ -320,13 +323,14 @@ const EmptyCodeLoc: TCodeLocation = (Address: nil; SourceFilename: ''; UnitName:
 function PassFilter(const Tag: TLogTag; Level: TLogLevel): Boolean;                // TODO: optimize
 var
   i: Integer;
-  TagStart: TLogTag;
+  TagStart, TagUpper: TLogTag;
 begin
   Result := false;
+  TagUpper := UpperCase(Tag);
   for i := FilterSize - 1 downto 0 do
   begin
     TagStart := Filter^[i].TagStart;
-    if Copy(Tag, STRING_INDEX_BASE, Length(Prefix)) = TagStart then
+    if Copy(TagUpper, STRING_INDEX_BASE, Length(TagStart)) = TagStart then
       if Level < Filter^[i].MinLevel then
         Exit;
   end;
@@ -437,18 +441,42 @@ begin
   Result := TLog.Create(TLogTag(Format(Tag, Args)));
 end;
 
+function GetFilterIndex(const TagStartUpper: TLogTag): Integer;
+begin
+  Result := FilterSize-1;
+  while (Result >= 0) and (Filter^[Result].TagStart <> TagStartUpper) do
+    Dec(Result);
+end;
+
 procedure SetFiltering(const TagStart: TLogTag; MinLevel: TLogLevel);
+var
+  TagStartUpper: TLogTag;
+  Index: Integer;
 begin
   Lock();
   try
-    Inc(FilterSize);
-    if FilterCapacity < FilterSize then
+    TagStartUpper := UpperCase(TagStart);
+    Index := GetFilterIndex(TagStartUpper);
+    if Index < 0 then
     begin
-      FilterCapacity := FilterSize +4;
-      ReallocMem(Filter, SizeOf(TLogFilter) * FilterCapacity);
+      Index := FilterSize;
+      Inc(FilterSize);
+      if FilterCapacity < FilterSize then
+      begin
+        FilterCapacity := FilterSize + 4;
+        ReallocMem(Filter, SizeOf(TLogFilter) * FilterCapacity);
+      end;
+      Filter^[FilterSize - 1].TagStart := TagStartUpper;
+      Filter^[FilterSize - 1].MinLevel := MinLevel;
+      DoLog(LOG_TAG, 'Added filter for tag "%s" with level %s. Filter size: %d', llInfo, [TagStart, LEVEL_NAME[MinLevel], FilterSize]);
+    end else if MinLevel = llVerbose then begin            // Remove entry
+      Filter^[Index] := Filter^[FilterSize - 1];
+      Dec(FilterSize);
+      DoLog(LOG_TAG, 'Removed filter for tag "%s". Filter size: %d', llInfo, [TagStart, FilterSize]);
+    end else begin
+      Filter^[FilterSize - 1].MinLevel := MinLevel;
+      DoLog(LOG_TAG, 'Replaced filter for tag "%s" with level %s. Filter size: %d', llInfo, [TagStart, LEVEL_NAME[MinLevel], FilterSize]);
     end;
-    Filter^[FilterSize-1].TagStart := TagStart;
-    Filter^[FilterSize-1].MinLevel := MinLevel;
   finally
     UnLock();
   end;
@@ -487,7 +515,7 @@ begin
 
   CodeLocation := GetCodeLoc(Filename, '', '', LineNumber, ErrorAddr);
 
-  DoLog('', Message, CodeLocation, AssertLogLevel);
+  DoLog(CurrentTag, Message, CodeLocation, AssertLogLevel);
 end;
 
 function _Log(Level: TLogLevel): Boolean; overload;
@@ -515,7 +543,7 @@ procedure AddAppender(Appender: TAppender);
 begin
   if not Assigned(Appender) then Exit;
   if IndexOfAppender(Appender) >= 0 then begin
-    DoLog('logger', 'Duplicate appender of class "%s', llWarning, [Appender.ClassName]);
+    DoLog(LOG_TAG, 'Duplicate appender of class "%s', llWarning, [Appender.ClassName]);
     Exit;
   end;
   Lock();
@@ -742,7 +770,7 @@ initialization
   ResetFiltering();
   AddDefaultAppenders();
 finalization
-  DoLog('logger', 'Log session shutdown', llInfo, []);
+  DoLog(LOG_TAG, 'Log session shutdown', llInfo, []);
   DestroyAppenders();
   ResetFiltering();
   {$IFDEF MULTITHREADLOG}
