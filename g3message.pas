@@ -178,6 +178,10 @@ type
   TWindowMinimizeMsg = class(TOSMessage)
   end;
 
+  // Indicates than OS request window to be repainted
+  TWindowPaintMsg = class(TOSMessage)
+  end;
+
   // If some data may be referenced by pointer and the pointer to the data has changed this message is broadcasted with new pointer
   TDataAdressChangeMsg = class(TNotificationMessage)
   public

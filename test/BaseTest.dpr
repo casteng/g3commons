@@ -97,7 +97,7 @@ begin
   for i := 0 to High(Strs) do
     Strs[i] := 'Str #' + IntToStr(i);
   Joined := JoinStrArray(Strs, ', ');
-  Log('Joined: ' + Joined);
+  g3log.Debug('Joined: ' + Joined);
   Assert(_Check(Joined = 'Str #0, Str #1, Str #2, Str #3'), 'String join');
   Assert(_Check(JoinStrArray(Strs, '') = 'Str #0Str #1Str #2Str #3'), 'String join w/o separator');
   Strs[0] := '';
