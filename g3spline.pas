@@ -18,21 +18,22 @@ type
   TSingleBuffer = array[0..MaxInt div SizeOf(Single) - 1] of Single;
   PSingleBuffer = ^TSingleBuffer;
 
-  TSplineKoeff = record
+  TSplineCoeff = record
     A, B, C, D: Single;
   end;
 
-  TSplineKoeffs = array[0..MaxInt div SizeOf(TSplineKoeff) - 1] of TSplineKoeff;
-  PSplineKoeffs = ^TSplineKoeffs;
+  TSplineCoeffs = array[0..MaxInt div SizeOf(TSplineCoeff) - 1] of TSplineCoeff;
+  PSplineCoeffs = ^TSplineCoeffs;
 
   TSpline = class(TObject)
   private
+    FCoeffsDirty: Boolean;
+    FCoeff: PSplineCoeffs;
     FStride: Integer;
-    Koeff: PSplineKoeffs;
     FSamples: PSingleBuffer;
     FSampleCount: Integer;
     procedure SetSampleCount(Count: Integer);
-    procedure CalcKoeffs(StartIndex, EndIndex: Integer);
+    procedure CalcCoeffs(StartIndex, EndIndex: Integer);
     function GetInterpolated(Param: Single; Channel: Integer): Single;
     function GetInterpolatedTangent(Param: Single; Channel: Integer): Single;
     function GetSegmentCount(): Integer;
@@ -40,13 +41,30 @@ type
     constructor Create(Stride: Integer);
     destructor Destroy(); override;
     procedure SetSamples(Count: Integer; ASamples: PSingleBuffer);
-
-    procedure findRoot1(Segment, Channel: Integer; out R1, R2: Single);
-    procedure findRoot2(Segment, Channel: Integer; out R: Single);
-
+    procedure FindExtremums(Segment, Channel: Integer; out R1, R2: Single);
+    procedure FindInflection(Segment, Channel: Integer; out R: Single);
     property Samples: PSingleBuffer read FSamples;
     property SampleCount: Integer read FSampleCount write SetSampleCount;
     property SegmentCount: Integer read GetSegmentCount;
+  end;
+
+  TSpline1D = class;
+
+  TSplineIterator = class(TObject)
+  private
+    FSpline: TSpline;
+    t, maxT: Single;
+  end;
+
+  TIterStep1D = class(TSplineIterator)
+  private
+    FStep: Single;
+  public
+    constructor Create(Spline: TSpline1D; Step: Single);
+    function GetEnumerator(): TIterStep1D;
+    function MoveNext(): Boolean;
+    function GetCurrent(): TVector2f;
+    property Current: TVector2f read GetCurrent;
   end;
 
   TSpline1D = class(TSpline)
@@ -57,9 +75,26 @@ type
     function GetInterpolatedTangent(Param: Single): Single;
   public
     constructor Create();
+    function GetEnumerator(): TIterStep1D;
+    function WithStep(Step: Single): TIterStep1D;
     property Sample[Index: Integer]: Single read GetSample write SetSample;
     property Value[T: Single]: Single read GetInterpolated; default;
     property Tangent[T: Single]: Single read GetInterpolatedTangent;
+  end;
+
+  TSpline2D = class;
+
+  TIterStep2D = class(TSplineIterator)
+  private
+    FStep: Single;
+    FLast: TVector2f;
+    FEndMarker: Integer;
+  public
+    constructor Create(Spline: TSpline2D; Step: Single);
+    function GetEnumerator(): TIterStep2D;
+    function MoveNext(): Boolean;
+    function GetCurrent(): TVector2f;
+    property Current: TVector2f read GetCurrent;
   end;
 
   TSpline2D = class(TSpline)
@@ -70,17 +105,18 @@ type
     function GetInterpolatedTangent(Param: Single): TVector2f;
   public
     constructor Create();
+    function GetEnumerator(): TIterStep2D;
+    function WithStep(Step: Single): TIterStep2D;
     function GetNearestParamApprox(const Point: TVector2f; subdiv: integer): Single;
     function GetNearestSegment(const Point: TVector2f): Integer;
     function GetNearestParamApproxOpt(const Point: TVector2f; subdiv: integer): Single;
+    // Axis aligned bounding box of the spline (x and y coordinates are used)
+    function GetAABB(): TAABB;
     property Sample[Index: Integer]: TVector2f read GetSample write SetSample;
     property Value[T: Single]: TVector2f read GetInterpolated; default;
     property Tangent[T: Single]: TVector2f read GetInterpolatedTangent;
+    property AABB: TAABB read GetAABB;
   end;
-
-  procedure CalcCatmullRom1D(PointsCount, Resolution: Integer; ControlPoints, Curve: PSingleBuffer; CurveStride: Integer = 1);
-  procedure CalcCatmullRom2D(PointsCount, Resolution: Integer; ControlPoints, Curve: P2DPointArray);
-  procedure CalcCatmullRomND(PointsCount, Resolution, N: Integer; ControlPoints, FinalCurve: Pointer; ControlStride, CurveStride: Integer);
 
 implementation
 
@@ -92,130 +128,7 @@ uses
   sysutils;
 
 type
-  TParamArray = array[0..6] of Single;
-
-procedure CalcCatmullRom1D(PointsCount, Resolution: Integer; ControlPoints, Curve: PSingleBuffer; CurveStride: Integer = 1);
-var
-  i, j, CI: Integer;
-  Ap, Bp, Cp, Dp: Single;
-  OverR, T: Single;
-begin
-  CI := 0;
-  OverR := 1 / Resolution;
-  ControlPoints^[0] := ControlPoints^[1];
-  ControlPoints^[PointsCount] := ControlPoints^[PointsCount - 1];
-  for i := 1 to PointsCount - 1 do
-  begin
-//Coeffs
-    Ap :=  -ControlPoints^[i-1] + 3*ControlPoints^[i] - 3*ControlPoints^[i+1] + ControlPoints^[i+2];
-    Bp := 2*ControlPoints^[i-1] - 5*ControlPoints^[i] + 4*ControlPoints^[i+1] - ControlPoints^[i+2];
-    Cp :=  -ControlPoints^[i-1] + ControlPoints^[i+1];
-    Dp := 2*ControlPoints^[i];
-//Calc
-    Curve^[CI] := ControlPoints^[i];
-    Inc(CI, CurveStride);
-    T := OverR;
-    for j := 1 to Resolution - 1 do
-    begin
-      Curve^[CI] := ((Ap * T * T * T) + (Bp * T * T) + (Cp * T) + Dp) * 0.5;  { Calc x value }
-      T := T + OverR;
-      Inc(CI, CurveStride);
-    end;
-  end;
-//  Curve^[CI] := CtrlPt^[PointsCount];
-end;
-
-procedure CalcCatmullRom2D(PointsCount, Resolution: Integer; ControlPoints, Curve: P2DPointArray);
-var
-  i0, i1, i2, i3, j, CI: Integer;
-  Ap, Bp, Cp, Dp: record X, Y: Single end;
-  OverR, T, T2, T3: Single;
-begin
-  Assert(PointsCount > 1);
-  Assert(Resolution > 0);
-  Assert(Assigned(ControlPoints) and Assigned(Curve));
-  CI := 0;
-  //ControlPoints^[0] := ControlPoints^[1];
-  //ControlPoints^[PointsCount + 1] := ControlPoints^[PointsCount];
-  OverR := 1 / Resolution;
-  for i1 := 0 to PointsCount - 2 do
-  begin
-    // TODO: optimize
-    i0 := MaxI(0, i1 - 1);
-    i2 := MinI(PointsCount - 1, i1 + 1);
-    i3 := MinI(PointsCount - 1, i1 + 2);
-    Ap.X :=  -ControlPoints^[i0].X + 3*ControlPoints^[i1].X - 3*ControlPoints^[i2].X + ControlPoints^[i3].X;
-    Bp.X := 2*ControlPoints^[i0].X - 5*ControlPoints^[i1].X + 4*ControlPoints^[i2].X - ControlPoints^[i3].X;
-    Cp.X :=  -ControlPoints^[i0].X + ControlPoints^[i2].X;
-    Dp.X := 2*ControlPoints^[i1].X;
-    Ap.Y :=  -ControlPoints^[i0].Y + 3*ControlPoints^[i1].Y - 3*ControlPoints^[i2].Y + ControlPoints^[i3].Y;
-    Bp.Y := 2*ControlPoints^[i0].Y - 5*ControlPoints^[i1].Y + 4*ControlPoints^[i2].Y - ControlPoints^[i3].Y;
-    Cp.Y :=  -ControlPoints^[i0].Y + ControlPoints^[i2].Y;
-    Dp.Y := 2*ControlPoints^[i1].Y;
-//Calc
-    Curve^[CI].X := Dp.X * 0.5;  { Calc x value }
-    Curve^[CI].Y := Dp.Y * 0.5;  { Calc y value }
-    Inc(CI);
-    T := OverR;
-    for j := 1 to Resolution - 1 do
-    begin
-      T2 := T * T;
-      T3 := T2 * T;
-      Curve^[CI].X := ((Ap.X * T3) + (Bp.X * T2) + (Cp.X * T) + Dp.X) * 0.5;  { Calc x value }
-      Curve^[CI].Y := ((Ap.Y * T3) + (Bp.Y * T2) + (Cp.Y * T) + Dp.Y) * 0.5;  { Calc y value }
-      T := T + OverR;
-      Inc(CI);
-    end;
-  end;
-  Curve^[CI] := ControlPoints^[PointsCount - 1];
-end;
-
-procedure CalcCatmullRomND(PointsCount, Resolution, N: Integer; ControlPoints, FinalCurve: Pointer; ControlStride, CurveStride: Integer);
-var
-  i, j, k, CI: Integer;
-  Ap, Bp, Cp, Dp: array of Single;
-  OverR, T, T2, T3: Single;
-  CtrlPt, Curve: PSingleBuffer;
-begin
-  CtrlPt := ControlPoints;
-  Curve := FinalCurve;
-  CI := 0;
-  for j := 0 to N - 1 do begin
-    CtrlPt^[0 + j] := CtrlPt^[1 * ControlStride + j];
-    CtrlPt^[(PointsCount + 1) * ControlStride + j] := CtrlPt^[PointsCount * ControlStride + j];
-  end;
-  OverR := 1 / Resolution;
-  SetLength(Ap, N);
-  SetLength(Bp, N);
-  SetLength(Cp, N);
-  SetLength(Dp, N);
-
-  for i := 1 to PointsCount - 1 do begin
-//Coeffs
-    for j := 0 to N - 1 do begin
-      Ap[j] :=    -CtrlPt^[(i - 1) * ControlStride + j] + 3 * CtrlPt^[i * ControlStride + j] - 3 * CtrlPt^[(i + 1) * ControlStride + j] + CtrlPt^[(i + 2) * ControlStride + j];
-      Bp[j] := 2 * CtrlPt^[(i - 1) * ControlStride + j] - 5 * CtrlPt^[i * ControlStride + j] + 4 * CtrlPt^[(i + 1) * ControlStride + j] - CtrlPt^[(i + 2) * ControlStride + j];
-      Cp[j] :=    -CtrlPt^[(i - 1) * ControlStride + j] + CtrlPt^[(i + 1) * ControlStride + j];
-      Dp[j] := 2 * CtrlPt^[i * ControlStride + j];
-      Curve^[CI * CurveStride + j] := Dp[j] * 0.5;  { Calc x value }
-    end;
-//Calc
-    Inc(CI);
-    T := OverR;
-    for k := 1 to Resolution - 1 do
-    begin
-      T2 := T * T;
-      T3 := T2 * T;
-      for j := 0 to N - 1 do
-        Curve^[CI * CurveStride + j] := ((Ap[j] * T3) + (Bp[j] * T2) + (Cp[j] * T) + Dp[j]) * 0.5;
-      { Calc x value }
-      T := T + OverR;
-      Inc(CI);
-    end;
-  end;
-  for j := 0 to N - 1 do
-    Curve^[CI * CurveStride + j] := CtrlPt^[PointsCount * ControlStride + j];
-end;
+  TParamArray = array[0..7] of Single;
 
 { TSpline }
 
@@ -226,11 +139,13 @@ var
 begin
   Assert(Param <= FSampleCount);
   Assert(Channel < FStride);
-  Segment := MinI(FSampleCount-2, trunc(Param));
+  if FCoeffsDirty then
+    CalcCoeffs(0, FSampleCount - 2);
+  Segment := MinI(FSampleCount - 2, trunc(Param));
   T := Param - Segment;
-  Segment := Segment*FStride + Channel;
+  Segment := Segment * FStride + Channel;
   T2 := Sqr(T);
-  Result := Koeff[Segment].A * T2 * T + Koeff[Segment].B * T2 + Koeff[Segment].C * T + Koeff[Segment].D;
+  Result := FCoeff[Segment].A * T2 * T + FCoeff[Segment].B * T2 + FCoeff[Segment].C * T + FCoeff[Segment].D;
 end;
 
 function TSpline.GetInterpolatedTangent(Param: Single; Channel: Integer): Single;
@@ -240,10 +155,12 @@ var
 begin
   Assert(Param <= FSampleCount);
   Assert(Channel < FStride);
-  Segment := MinI(FSampleCount-2, trunc(Param));
+  if FCoeffsDirty then
+    CalcCoeffs(0, FSampleCount - 2);
+  Segment := MinI(FSampleCount - 2, trunc(Param));
   T := Param - Segment;
-  Segment := Segment*FStride + Channel;
-  Result := 3*Koeff[Segment].A * T * T + 2*Koeff[Segment].B * T + Koeff[Segment].C;
+  Segment := Segment * FStride + Channel;
+  Result := 3 * FCoeff[Segment].A * T * T + 2 * FCoeff[Segment].B * T + FCoeff[Segment].C;
 end;
 
 procedure TSpline.SetSampleCount(Count: Integer);
@@ -251,10 +168,11 @@ begin
   if FSampleCount = Count then Exit;
   FSampleCount := Count;
   ReallocMem(FSamples, FSampleCount * SizeOf(Single) * FStride);
-  ReallocMem(Koeff, (FSampleCount-1) * SizeOf(TSplineKoeff) * FStride);
+  ReallocMem(FCoeff, (FSampleCount - 1) * SizeOf(TSplineCoeff) * FStride);
+  FCoeffsDirty := true;
 end;
 
-procedure TSpline.CalcKoeffs(StartIndex, EndIndex: Integer);
+procedure TSpline.CalcCoeffs(StartIndex, EndIndex: Integer);
 var
   i0, i1, i2, i3, j: Integer;
 begin
@@ -263,35 +181,37 @@ begin
   if FSampleCount < 2 then Exit;
   for i1 := StartIndex to EndIndex do
   begin
-    for j := 0 to FStride-1 do
+    for j := 0 to FStride - 1 do
     begin
-      i0 := MaxI(0, i1 - 1)*FStride+j;
-      i2 := MinI(FSampleCount - 1, i1 + 1)*FStride+j;
-      i3 := MinI(FSampleCount - 1, i1 + 2)*FStride+j;
-      Koeff^[i1*FStride+j].A := 0.5 * (-FSamples^[i0] + 3 * FSamples^[i1 * FStride + j] - 3 * FSamples^[i2] + FSamples^[i3]);
-      Koeff^[i1*FStride+j].B := FSamples^[i0] - 2.5 * FSamples^[i1*FStride+j] + 2 * FSamples^[i2] - 0.5 * FSamples^[i3];
-      Koeff^[i1*FStride+j].C := 0.5 * (-FSamples^[i0] + FSamples^[i2]);
-      Koeff^[i1*FStride+j].D := FSamples^[i1*FStride+j];
+      i0 := MaxI(0, i1 - 1) * FStride + j;
+      i2 := MinI(FSampleCount - 1, i1 + 1) * FStride + j;
+      i3 := MinI(FSampleCount - 1, i1 + 2) * FStride + j;
+      FCoeff^[i1 * FStride + j].A := 0.5 * (-FSamples^[i0] + 3 * FSamples^[i1 * FStride + j] - 3 * FSamples^[i2] + FSamples^[i3]);
+      FCoeff^[i1 * FStride + j].B := FSamples^[i0] - 2.5 * FSamples^[i1 * FStride + j] + 2 * FSamples^[i2] - 0.5 * FSamples^[i3];
+      FCoeff^[i1 * FStride + j].C := 0.5 * (-FSamples^[i0] + FSamples^[i2]);
+      FCoeff^[i1 * FStride + j].D := FSamples^[i1 * FStride + j];
     end;
   end;
+  FCoeffsDirty := false;
 end;
 
 function TSpline.GetSegmentCount(): Integer;
 begin
-  Result := SampleCount-1;
+  Result := SampleCount - 1;
 end;
 
 constructor TSpline.Create(Stride: Integer);
 begin
   FStride := Stride;
+  FCoeffsDirty := true;
 end;
 
 destructor TSpline.Destroy();
 begin
   if Assigned(FSamples) then
     FreeMem(FSamples);
-  if Assigned(Koeff) then
-    FreeMem(Koeff);
+  if Assigned(FCoeff) then
+    FreeMem(FCoeff);
   inherited;
 end;
 
@@ -301,14 +221,16 @@ begin
     exit;
   FSampleCount := Count;
   FSamples := ASamples;
-  if Assigned(Koeff) then
-    FreeMem(Koeff);
+  if Assigned(FCoeff) then
+    FreeMem(FCoeff);
   if FSampleCount > 0 then
-    GetMem(Koeff, (FSampleCount - 1) * SizeOf(TSplineKoeff) * FStride);
-  CalcKoeffs(0, FSampleCount - 2);
+    GetMem(FCoeff, (FSampleCount - 1) * SizeOf(TSplineCoeff) * FStride)
+  else
+    FCoeff := nil;
+  FCoeffsDirty := true;
 end;
 
-procedure findRoots(const K: TSplineKoeff; var Result: TParamArray; var Count: Integer);
+procedure findRoots(const K: TSplineCoeff; var Result: TParamArray; var Count: Integer);
 var
   A, B, C, D: Single;
 begin
@@ -324,7 +246,7 @@ begin
     end;
     exit;
   end;
-  D := B*B - 4 * A * C;
+  D := B * B - 4 * A * C;
   if D > 0 then
   begin
     Result[Count] := (-B - sqrt(D)) / (2 * A);
@@ -338,23 +260,27 @@ begin
   end;
 end;
 
-procedure TSpline.findRoot1(Segment, Channel: Integer; out R1, R2: Single);
+procedure TSpline.FindExtremums(Segment, Channel: Integer; out R1, R2: Single);
 var
   Result: TParamArray;
   Count: Integer;
 begin
+  if FCoeffsDirty then
+    CalcCoeffs(0, FSampleCount - 2);
   Count := 0;
-  findRoots(Koeff^[Segment*FStride + Channel], Result, Count);
+  findRoots(FCoeff^[Segment * FStride + Channel], Result, Count);
   R1 := Ord(Count > 0) * Result[0] - Ord(Count <= 0);
   R2 := Ord(Count > 1) * Result[1] - Ord(Count <= 1);
 end;
 
-procedure TSpline.findRoot2(Segment, Channel: Integer; out R: Single);
+procedure TSpline.FindInflection(Segment, Channel: Integer; out R: Single);
 begin
-  if Koeff^[Segment * FStride + Channel].A = 0 then
+  if FCoeffsDirty then
+    CalcCoeffs(0, FSampleCount - 2);
+  if FCoeff^[Segment * FStride + Channel].A = 0 then
     R := -1
   else
-    R := -Koeff^[Segment * FStride + Channel].B / (3 * Koeff^[Segment * FStride + Channel].A);
+    R := -FCoeff^[Segment * FStride + Channel].B / (3 * FCoeff^[Segment * FStride + Channel].A);
 end;
 
 { TSpline1D }
@@ -369,7 +295,7 @@ procedure TSpline1D.SetSample(Index: Integer; AValue: Single);
 begin
   Assert(Index < FSampleCount);
   FSamples^[Index] := AValue;
-  CalcKoeffs(0, FSampleCount - 2);
+  FCoeffsDirty := true;
 end;
 
 function TSpline1D.GetInterpolated(Param: Single): Single;
@@ -387,20 +313,30 @@ begin
   inherited Create(1);
 end;
 
+function TSpline1D.GetEnumerator(): TIterStep1D;
+begin
+  Result := TIterStep1D.Create(Self, 0.1);
+end;
+
+function TSpline1D.WithStep(Step: Single): TIterStep1D;
+begin
+  Result := TIterStep1D.Create(Self, Step);
+end;
+
 { TSpline2D }
 
 function TSpline2D.GetSample(Index: Integer): TVector2f;
 begin
   Assert(Index < FSampleCount);
-  Result := PVector2f(@FSamples^[Index*FStride])^;
+  Result := PVector2f(@FSamples^[Index * FStride])^;
 end;
 
 procedure TSpline2D.SetSample(Index: Integer; AValue: TVector2f);
 begin
   Assert(Index < FSampleCount);
-  FSamples^[Index*FStride] := AValue.x;
-  FSamples^[Index*FStride+1] := AValue.y;
-  CalcKoeffs(0, FSampleCount - 2);
+  FSamples^[Index * FStride] := AValue.x;
+  FSamples^[Index * FStride + 1] := AValue.y;
+  FCoeffsDirty := true;
 end;
 
 function TSpline2D.GetInterpolated(Param: Single): TVector2f;
@@ -420,6 +356,16 @@ begin
   inherited Create(2);
 end;
 
+function TSpline2D.GetEnumerator(): TIterStep2D;
+begin
+  Result := TIterStep2D.Create(Self, 0.1);
+end;
+
+function TSpline2D.WithStep(Step: Single): TIterStep2D;
+begin
+  Result := TIterStep2D.Create(Self, Step);
+end;
+
 function TSpline2D.GetNearestParamApprox(const Point: TVector2f; subdiv: integer): Single;
 var
   t, d, Nearest, step, maxT: Single;
@@ -430,7 +376,7 @@ begin
   Nearest := VectorMagnitudeSq(Vec2f(Point.x - FSamples^[0], Point.y - FSamples^[1]));
   step := 1 / subdiv;
   t := step;
-  maxT := FSampleCount- 1;
+  maxT := FSampleCount - 1;
   i := 0;
   while t < maxT do
   begin
@@ -440,10 +386,10 @@ begin
       Result := t;
       Nearest := d;
     end;
-    t := t+ step;
+    t := t + step;
     inc(i);
   end;
-  Debug('Nearest point search steps: %d', [i]);
+//  Debug('Nearest point search steps: %d', [i]);
 end;
 
 function checkPointDist(const v: TVector2f; var Nearest: Single): Boolean;
@@ -469,17 +415,18 @@ var
 begin
   Result := 0;
   nearest := VectorMagnitudeSq(Vec2f(Point.x - FSamples^[0], Point.y - FSamples^[1]));
-  for i := 1 to FSampleCount-2 do
+  for i := 1 to FSampleCount - 2 do
   begin
-    d2 := VectorMagnitudeSq(Vec2f(Point.x - FSamples^[i*FStride], Point.y - FSamples^[i*FStride+1]));
+    d2 := VectorMagnitudeSq(Vec2f(Point.x - FSamples^[i * FStride], Point.y - FSamples^[i * FStride + 1]));
     if d2 < nearest then
     begin
       nearest := d2;
       Result := i;
     end;
   end;
-  Debug('= Nearest #%d', [Result]);
 end;
+
+{ TSplineIterator }
 
 function TSpline2D.GetNearestParamApproxOpt(const Point: TVector2f; subdiv: integer): Single;
 var
@@ -512,59 +459,55 @@ var
         Ex[n2 + 1] := bv;
     end;
     s := '';
-    for n1 := 0 to ExCount-1 do
-    begin
-      Assert((n1 = 0) or (Ex[n1] >= Ex[n1 - 1]), 'Sort fail');
-      s := Format('%S__%3.5F', [s, Ex[n1]]);
-    end;
-    Debug('=== Spans: 0__%s__1, count: %d', [s, ExCount+1]);
   end;
 
 begin
   Assert(FStride > 1, 'Stride must be > 1 for 2D nearest point search');
+  if FCoeffsDirty then
+    CalcCoeffs(0, FSampleCount - 2);
   segI := GetNearestSegment(Point);
   Result := segI;
-  Nearest := VectorMagnitudeSq(Vec2f(Point.x - FSamples^[segI*FStride], Point.y - FSamples^[segI*FStride+1]));
+  Nearest := VectorMagnitudeSq(Vec2f(Point.x - FSamples^[segI * FStride], Point.y - FSamples^[segI * FStride + 1]));
   iterations := 0;
   step := 1 / subdiv;
-  for i := 0 to FSampleCount-2 do
+  for i := 0 to FSampleCount - 2 do
   begin
     t := segI;
-    Min.X := MinS(FSamples^[segI*FStride],   FSamples^[(segI+1)*FStride]);
-    Min.Y := MinS(FSamples^[segI*FStride+1], FSamples^[(segI+1)*FStride+1]);
-    Max.X := MaxS(FSamples^[segI*FStride],   FSamples^[(segI+1)*FStride]);
-    Max.Y := MaxS(FSamples^[segI*FStride+1], FSamples^[(segI+1)*FStride+1]);
+    Min.X := MinS(FSamples^[segI * FStride], FSamples^[(segI + 1) * FStride]);
+    Min.Y := MinS(FSamples^[segI * FStride + 1], FSamples^[(segI + 1) * FStride + 1]);
+    Max.X := MaxS(FSamples^[segI * FStride], FSamples^[(segI + 1) * FStride]);
+    Max.Y := MaxS(FSamples^[segI * FStride + 1], FSamples^[(segI + 1) * FStride + 1]);
     ExCount := 0;
-    findRoots(Koeff^[segI*FStride], Ex, ExCount);
+    findRoots(FCoeff^[segI * FStride], Ex, ExCount);
     if ExCount > 0 then
       UpdateBB(GetInterpolated(segI + Ex[0]).x, Min.X, Max.X);
     if ExCount > 1 then
       UpdateBB(GetInterpolated(segI + Ex[1]).x, Min.X, Max.X);
     ExNum := ExCount;
-    findRoots(Koeff^[segI*FStride+1], Ex, ExCount);
+    findRoots(FCoeff^[segI * FStride + 1], Ex, ExCount);
     if ExCount > ExNum then
       UpdateBB(GetInterpolated(segI + Ex[ExNum]).y, Min.Y, Max.Y);
     if ExCount > ExNum + 1 then
-      UpdateBB(GetInterpolated(segI + Ex[ExNum+1]).y, Min.Y, Max.Y);
+      UpdateBB(GetInterpolated(segI + Ex[ExNum + 1]).y, Min.Y, Max.Y);
     //Debug('= BB #%d: [%3.5F, %3.5F - %3.5F, %3.5F]', [segI, Min.X, Min.Y, Max.X, Max.Y]);
 
     if Sqr(MaxS(0, BoxDistance(Point, Min, Max))) > Nearest then
     begin
-      Debug('= Skipping segment #%d: [%3.5F, %3.5F - %3.5F, %3.5F] for (%3.5F, %3.5F), dist: %3.5F, min: %3.5F', [segI, Min.X, Min.Y, Max.X, Max.Y, Point.x, Point.y, BoxDistance(Point, Min, Max), Nearest]);
+//      Debug('= Skipping segment #%d: [%3.5F, %3.5F - %3.5F, %3.5F] for (%3.5F, %3.5F), dist: %3.5F, min: %3.5F', [segI, Min.X, Min.Y, Max.X, Max.Y, Point.x, Point.y, BoxDistance(Point, Min, Max), Nearest]);
       segI := segI + 1;
-      if segI > FSampleCount-2 then
+      if segI > FSampleCount - 2 then
         segI := 0;
       continue;
     end;
 
-    findRoot2(segI, 0, Ex[ExCount]);
+    FindInflection(segI, 0, Ex[ExCount]);
     ExCount := ExCount + Ord((Ex[ExCount] > 0) and (Ex[ExCount] < 1));
-    findRoot2(segI, 1, Ex[ExCount]);
+    FindInflection(segI, 1, Ex[ExCount]);
     ExCount := ExCount + Ord((Ex[ExCount] > 0) and (Ex[ExCount] < 1));
     SortEx();
     Ex[ExCount] := 1;
     ExNum := 0;
-    while ExNum < ExCount+1 do
+    while ExNum < ExCount + 1 do
     begin
       txy := GetInterpolatedTangent(t);
       xy := GetInterpolated(t);
@@ -579,7 +522,7 @@ begin
         begin
           if checkPointDist(dxy, Nearest) then
             Result := t;
-          Debug('=== skipping by %3.5F, t: %3.5F, span: [%3.5F..%3.5F]', [(segI + Ex[ExNum]) - t, t, t, segI + Ex[ExNum]]);
+//          Debug('=== skipping by %3.5F, t: %3.5F, span: [%3.5F..%3.5F]', [(segI + Ex[ExNum]) - t, t, t, segI + Ex[ExNum]]);
           t := t2;
         end;
         inc(iterations);
@@ -590,10 +533,10 @@ begin
         VectorSub(dxy2, Point, xy2);
         // if at span ending the curve is still directed towards P
         if VectorDot(GetInterpolatedTangent(t2), dxy2) >= 0 then
-          // if P and span ending point are on the same side of tangent line at span beginning point that span can be skipped (span ending is checked)
+            // if P and span ending point are on the same side of tangent line at span beginning point that span can be skipped (span ending is checked)
           if VectorDot(txy, dxy) * SignedAreaX2(VectorSub(xy2, xy), txy) <= 0 then
           begin
-            Debug('==- skipping by %3.5F, t: %3.5F, span: [%3.5F..%3.5F]', [t2 - t, t, t, t2]);
+//            Debug('==- skipping by %3.5F, t: %3.5F, span: [%3.5F..%3.5F]', [t2 - t, t, t, t2]);
             if checkPointDist(dxy2, Nearest) then
               Result := t2;
             t := t2;
@@ -617,10 +560,120 @@ begin
       Inc(ExNum);
     end;
     segI := segI + 1;
-    if segI > FSampleCount-2 then
+    if segI > FSampleCount - 2 then
       segI := 0;
   end;
-  Debug('Nearest point search steps: %d', [iterations]);
+//  Debug('Nearest point search steps: %d', [iterations]);
+end;
+
+function TSpline2D.GetAABB(): TAABB;
+var
+  Ex: TParamArray;
+  segI: Integer;
+  ExNum, ExCount: Integer;
+begin
+  if FCoeffsDirty then
+    CalcCoeffs(0, FSampleCount - 2);
+  Result.P1.X := MinS(FSamples^[0], FSamples^[FStride]);
+  Result.P1.Y := MinS(FSamples^[1], FSamples^[FStride + 1]);
+  Result.P2.X := MaxS(FSamples^[0], FSamples^[FStride]);
+  Result.P2.Y := MaxS(FSamples^[1], FSamples^[FStride + 1]);
+  ExCount := 0;
+  findRoots(FCoeff^[0], Ex, ExCount);
+  if ExCount > 0 then
+    UpdateBB(GetInterpolated(Ex[0]).x, Result.P1.X, Result.P2.X);
+  if ExCount > 1 then
+    UpdateBB(GetInterpolated(Ex[1]).x, Result.P1.X, Result.P2.X);
+  ExNum := ExCount;
+  findRoots(FCoeff^[1], Ex, ExCount);
+  if ExCount > ExNum then
+    UpdateBB(GetInterpolated(Ex[ExNum]).y, Result.P1.Y, Result.P2.Y);
+  if ExCount > ExNum + 1 then
+    UpdateBB(GetInterpolated(Ex[ExNum + 1]).y, Result.P1.Y, Result.P2.Y);
+  for segI := 1 to FSampleCount - 2 do
+  begin
+    UpdateBB(FSamples^[segI * FStride], Result.P1.x, Result.P2.x);
+    UpdateBB(FSamples^[segI * FStride + 1], Result.P1.y, Result.P2.y);
+    UpdateBB(FSamples^[(segI + 1) * FStride], Result.P1.x, Result.P2.x);
+    UpdateBB(FSamples^[(segI + 1) * FStride + 1], Result.P1.y, Result.P2.y);
+    ExCount := 0;
+    findRoots(FCoeff^[segI * FStride], Ex, ExCount);
+    if ExCount > 0 then
+      UpdateBB(GetInterpolated(segI + Ex[0]).x, Result.P1.X, Result.P2.X);
+    if ExCount > 1 then
+      UpdateBB(GetInterpolated(segI + Ex[1]).x, Result.P1.X, Result.P2.X);
+    ExNum := ExCount;
+    findRoots(FCoeff^[segI * FStride + 1], Ex, ExCount);
+    if ExCount > ExNum then
+      UpdateBB(GetInterpolated(segI + Ex[ExNum]).y, Result.P1.Y, Result.P2.Y);
+    if ExCount > ExNum + 1 then
+      UpdateBB(GetInterpolated(segI + Ex[ExNum + 1]).y, Result.P1.Y, Result.P2.Y);
+  end;
+end;
+
+{ TIterStep1D }
+
+constructor TIterStep1D.Create(Spline: TSpline1D; Step: Single);
+begin
+  FSpline := Spline;
+  FStep := Step;
+  maxT := Spline.SampleCount - 1 + FStep * 0.01;
+  t := -FStep;
+end;
+
+function TIterStep1D.GetEnumerator(): TIterStep1D;
+begin
+  Result := Self;
+end;
+
+function TIterStep1D.MoveNext(): Boolean;
+begin
+  t := t + FStep;
+  Result := t < maxT;
+  if not Result then
+    t := maxT - FStep * 0.01;
+end;
+
+function TIterStep1D.GetCurrent(): TVector2f;
+begin
+  Result := Vec2f(t, TSpline1D(FSpline)[t]);
+end;
+
+{ TIterStep2D }
+
+constructor TIterStep2D.Create(Spline: TSpline2D; Step: Single);
+begin
+  FSpline := Spline;
+  FStep := Step;
+  maxT := Spline.SampleCount - 1;
+  t := 0;
+  FLast := Spline.Sample[0];
+  FEndMarker := Ord(Spline.SampleCount < 2);
+end;
+
+function TIterStep2D.GetEnumerator(): TIterStep2D;
+begin
+  Result := Self;
+end;
+
+function TIterStep2D.MoveNext(): Boolean;
+var
+  dir: TVector2f;
+  d: Single;
+begin
+  Result := FEndMarker <= 1;
+  FLast := TSpline2D(FSpline)[t];
+  dir := TSpline2D(FSpline).Tangent[t];
+  d := sqrt(sqr(dir.x) + sqr(dir.y));
+  t := t + fstep / d;
+  FEndMarker := FEndMarker + Ord(t >= maxT);
+  if FEndMarker > 0 then
+    t := maxT;
+end;
+
+function TIterStep2D.GetCurrent(): TVector2f;
+begin
+  Result := FLast;
 end;
 
 end.
