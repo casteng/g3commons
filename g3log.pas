@@ -486,7 +486,9 @@ procedure ResetFiltering();
 begin
   Lock();
   try
-    FreeAndNil(Filter);
+    if Filter <> nil then
+      FreeMem(Filter);
+    Filter := nil;
     FilterSize := 0;
     FilterCapacity := 0;
   finally
@@ -767,6 +769,7 @@ initialization
   {$IFDEF MULTITHREADLOG}
     MutexCreate(Mutex);
   {$ENDIF}
+  Filter := nil;
   ResetFiltering();
   AddDefaultAppenders();
 finalization
