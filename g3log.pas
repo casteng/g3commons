@@ -615,9 +615,28 @@ begin
   {$ENDIF}{$ENDIF}
 end;
 
+procedure LogErrorIfAny();
+var
+  PE: TObject;
+  Buf: array[0..1023] of Char;
+begin
+  if ExceptObject() <> nil then
+  begin
+    PE := AcquireExceptionObject();
+    if PE <> nil then
+    begin
+      ExceptionErrorMessage(PE, ExceptAddr(), Buf, 1024);
+      DoLog(LOG_TAG, Buf, EmptyCodeLoc, llError);
+      ReleaseExceptionObject();
+      Halt(1);
+    end;
+  end;
+end;
+
 procedure DestroyAppenders();
 var i: Integer;
 begin
+  LogErrorIfAny();
   Lock();
   try
     for i := 0 to High(FAppenders) do begin
