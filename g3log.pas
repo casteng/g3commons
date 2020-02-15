@@ -20,6 +20,7 @@ type
   TLogLevel = (llVerbose, llDebug, llInfo, llWarning, llError, llFatalError);
   // Tag used to filter log messages on subsystem basis
   TLogTag = AnsiString;
+  TLogTagStatic = string[127];
 
 type
   // Method pointer which formats
@@ -215,7 +216,7 @@ uses
 
 type
   TLogFilter = record
-    TagStart: TLogTag;
+    TagStart: TLogTagStatic;
     MinLevel: TLogLevel;
   end;
   TlogFilters = array [0..$FFFF] of TLogFilter;
@@ -452,6 +453,7 @@ procedure SetFiltering(const TagStart: TLogTag; MinLevel: TLogLevel);
 var
   TagStartUpper: TLogTag;
   Index: Integer;
+  OldFilterCapacity: Integer;
 begin
   Lock();
   try
@@ -463,8 +465,10 @@ begin
       Inc(FilterSize);
       if FilterCapacity < FilterSize then
       begin
+        OldFilterCapacity := FilterCapacity;
         FilterCapacity := FilterSize + 4;
         ReallocMem(Filter, SizeOf(TLogFilter) * FilterCapacity);
+//        FillChar(Filter^[OldFilterCapacity], (FilterCapacity - OldFilterCapacity) * SizeOf(TLogFilter), 0);
       end;
       Filter^[FilterSize - 1].TagStart := TagStartUpper;
       Filter^[FilterSize - 1].MinLevel := MinLevel;
