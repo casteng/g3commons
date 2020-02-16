@@ -36,7 +36,8 @@ type
 
     procedure AddProperties(Properties: TProperties);
     procedure Remove(const Name: TPropertyName);
-
+    function GetString(const Name: TPropertyName; const Def: string = ''): string;
+    function GetAnsiString(const Name: TPropertyName; const Def: AnsiString = ''): AnsiString;
     function GetFlag(const Name: TPropertyName; const Def: Boolean = false): Boolean;
     function GetInt(const Name: TPropertyName; const Def: Integer = 0): Integer;
     function GetInt64(const Name: TPropertyName; const Def: Int64 = 0): Int64;
@@ -134,6 +135,26 @@ end;
 procedure TConfig.Remove(const Name: TPropertyName);
 begin
   g3log.DoLog(LOGTAG, 'Not implemented', llInfo, []);
+end;
+
+function TConfig.GetString(const Name: TPropertyName; const Def: string = ''): string;
+var
+  Value: PPropertyValue;
+begin
+  Result := Def;
+  Value := Data.Value[Name];
+  if Assigned(Value) then
+    Result := Value^.AsUnicodeString;
+end;
+
+function TConfig.GetAnsiString(const Name: TPropertyName; const Def: AnsiString = ''): AnsiString;
+var
+  Value: PPropertyValue;
+begin
+  Result := Def;
+  Value := Data.Value[Name];
+  if Assigned(Value) then
+    Result := Value^.AsAnsiString;
 end;
 
 function TConfig.GetFlag(const Name: TPropertyName; const Def: Boolean = false): Boolean;
