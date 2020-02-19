@@ -103,7 +103,8 @@ type
       obj := TSomeObject.Create();
       Managed.AddObject(obj);
     end;
-    The container and all added objects will be destroyed after the current routine execution (but not after "with" statement end). }
+    The container and all added objects will be destroyed after the current routine execution (but not after "with" statement end).
+    Do not share the same instance to different threads! }
   IRefcountedContainer = interface
     // Adds an object instance
     function AddObject(Obj: TObject): TObject;

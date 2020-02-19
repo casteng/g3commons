@@ -128,6 +128,7 @@ type
       g3Log.Debug('Direct calls too');
       ...
     end;
+    Do not share the same instance to different threads!
   }
   function WithTag(const Tag: TLogTag): ILog; overload;
 
